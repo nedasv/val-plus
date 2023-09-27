@@ -11,9 +11,6 @@ struct Lockfile {
 struct Entiltement {
     #[serde(rename = "accessToken")]
     access_token: String,
-    entitlements: Vec<String>,
-    issuer: String,
-    subject: String,
     token: String,
 }
 
@@ -28,6 +25,58 @@ struct GamePlayer {
     #[serde(rename = "MatchID")]
     match_id: String,
 }
+
+#[derive(serde::Deserialize, Debug)]
+struct CurrentMatch {
+    #[serde(rename = "MapID")]
+    map_id: String,
+    #[serde(rename = "ModeID")]
+    mode_id: String,
+    #[serde(rename = "ProvisioningFlow")]
+    game_type: String,
+    #[serde(rename = "Players")]
+    players: Vec<CurrentMatchPlayer>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct CurrentMatchPlayer {
+    #[serde(rename = "TeamID")]
+    team_id: String,
+    #[serde(rename = "CharacterID")]
+    character_id: String,
+    #[serde(rename = "PlayerIdentity")]
+    player_identity: PlayerIdentity,
+    #[serde(rename = "SeasonalBadgeInfo")]
+    player_act_info: PlayerActInfo,
+
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct PlayerIdentity {
+    #[serde(rename = "Subject")]
+    uuid: String,
+    #[serde(rename = "PlayerCardID")]
+    card_id: String,
+    #[serde(rename = "PlayerTitleID")]
+    title_id: String,
+    #[serde(rename = "AccountLevel")]
+    account_level: u16,
+    #[serde(rename = "Incognito")]
+    incognito: bool,
+    #[serde(rename = "HideAccountLevel")]
+    hide_account_level: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct PlayerActInfo {
+    #[serde(rename = "NumberOfWins")]
+    wins: u16,
+    #[serde(rename = "Rank")]
+    rank: u8,
+    #[serde(rename = "LeaderboardRank")]
+    leaderboard_rank: u16,
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -98,5 +147,5 @@ async fn main() {
         .send()
         .await;
 
-    println!("{:?}", match_data.unwrap().text().await.unwrap());
+    println!("{:?}", match_data.unwrap().json::<CurrentMatch>().await.unwrap());
 }
