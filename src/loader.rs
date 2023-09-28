@@ -5,6 +5,12 @@ pub struct Lockfile {
     pub password: String,
 }
 
+#[derive(Debug)]
+pub struct User {
+    pub region: String,
+    pub shard: String,
+}
+
 // Reads lockfile data from "C:\Users\User1\AppData\Local\Riot Games\Riot Client\Config" which contains the port and password to access local api
 pub fn get_lockfile() -> Option<Lockfile> {
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
@@ -35,7 +41,7 @@ pub fn get_lockfile() -> Option<Lockfile> {
     return None;
 }
 
-pub fn get_region_shard() -> Option<String>{
+pub fn get_region_shard(user: &User) -> Option<bool>{
     println!("REGION");
 
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
@@ -70,9 +76,20 @@ pub fn get_region_shard() -> Option<String>{
             Some(shard) => shard,
             None => return None,
         };
-        
 
-        println!("{:?} {:?}", region.get(1).unwrap().as_str().to_string(), shard.get(1).unwrap().as_str().to_string());
+        if let Some(region) = region.get(1) {
+            user.region = region.as_str().to_string();
+
+            if let Some(shard) = shard.get(1) {
+                user.shard = shard.as_str().to_string();
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+        
+        //println!("{:?} {:?}", region.get(1).unwrap().as_str().to_string(), shard.get(1).unwrap().as_str().to_string());
     }
 
     return None
