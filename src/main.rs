@@ -33,6 +33,9 @@ impl Sandbox for App {
     fn update(&mut self, message: Message) {
         match message {
             Message::GetData => {
+
+                loader::get_region_shard();
+
                 let lockfile = loader::get_lockfile();
                 let auth = auth::get_auth(&lockfile.unwrap());
 

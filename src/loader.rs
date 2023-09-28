@@ -34,3 +34,46 @@ pub fn get_lockfile() -> Option<Lockfile> {
     }
     return None;
 }
+
+pub fn get_region_shard() -> Option<String>{
+    println!("REGION");
+
+    if let Ok(path) = std::env::var("LOCALAPPDATA") {
+        let shooter_game_path = format!("{}{}", path, "\\VALORANT\\Saved\\Logs\\ShooterGame.log");
+
+        println!("{:?}", shooter_game_path);
+
+        let content = match std::fs::read_to_string(&shooter_game_path) {
+            Ok(text) => text,
+            Err(err) => {
+                println!("{:?}", err);
+                return None},
+        };
+
+        // Uses an endpoint log used by valorant to extract region and shard of player
+        let split_1: Vec<&str> = content.split("[Party_FetchCustomGameConfigs], URL [GET ").collect();
+        let split_2: Vec<&str> = split_1.get(1).unwrap().split("/parties/v1/parties/customgameconfigs]").collect();
+
+        let link = match split_2.get(0) {
+            Some(link) => link,
+            None => return None,
+        };
+
+        let region_re = regex::Regex::new(r"-(\w+)-").unwrap();
+        let region = match region_re.captures(&link) {
+            Some(region) => region,
+            None => return None,
+        };
+
+        let shard_re = regex::Regex::new(r"1.(\w+).").unwrap();
+        let shard = match shard_re.captures(&link) {
+            Some(shard) => shard,
+            None => return None,
+        };
+        
+
+        println!("{:?} {:?}", region.get(1).unwrap().as_str().to_string(), shard.get(1).unwrap().as_str().to_string());
+    }
+
+    return None
+}
