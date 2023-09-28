@@ -46,7 +46,10 @@ impl Sandbox for App {
                 
                 let val_client = loader::get_client_version(&lockfile, &mut user).unwrap();
 
-                party::get_party(&lockfile, &val_client.host_app, &user, &auth);
+                let party = party::get_party_id(&val_client.host_app, &user, &auth).unwrap();
+
+                println!("{:?}", party::get_party_members(&user, &party, &auth));
+
 
             }
         }
