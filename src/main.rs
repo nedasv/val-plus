@@ -6,8 +6,9 @@ use iced::{Element, Sandbox, Settings};
 use iced::widget::{Button, button};
 
 mod loader;
-mod player_info;
+//mod player_info;
 mod auth;
+mod party;
 
 struct App;
 #[derive(Clone, Copy, Debug)]
@@ -36,12 +37,13 @@ impl Sandbox for App {
                 let mut user = loader::User::default();
 
                 loader::get_region_shard(&mut user);
+                
 
                 let lockfile = loader::get_lockfile().unwrap();
-                let auth = auth::get_auth(&lockfile);
+                let auth = auth::get_auth(&lockfile).unwrap();
 
 
-
+                loader::get_player_info(&mut user, &auth);
 
                 println!("{:?}", loader::get_client_version(&lockfile, &mut user))
             }

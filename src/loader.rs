@@ -1,3 +1,5 @@
+use crate::auth::Authorization;
+
 
 #[derive(Debug, Default)]
 pub struct Lockfile {
@@ -9,6 +11,13 @@ pub struct Lockfile {
 pub struct User {
     pub region: String,
     pub shard: String,
+    pub puuid: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct UserId {
+    #[serde(rename = "sub")]
+    pub puuid: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -28,6 +37,7 @@ impl Default for User {
         Self {
             region: String::from("eu"),
             shard: String::from("eu"),
+            puuid: String::from("0"),
         }
     }
 }
@@ -136,4 +146,27 @@ pub fn get_client_version(lockfile: &Lockfile, user: &mut User) -> Option<HostAp
     };
 
     return Some(res.json::<HostApp>().unwrap());
+}
+
+pub fn get_player_info(user: &mut User, auth: &Authorization) {
+    let client = match reqwest::blocking::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build() {
+            Ok(client) => client,
+            Err(_) => return,
+    };
+
+    let res = match client.get("https://auth.riotgames.com/userinfo").bearer_auth(&auth.access_token).send() {
+        Ok(response) => {
+            println!("{:?}", response);
+            response
+        },
+        Err(err) => {
+            println!("{:?}", err);    
+            return;
+        },
+    };
+
+    let info = res.json::<UserId>().unwrap();
+    user.puuid = info.puuid.clone();
 }
