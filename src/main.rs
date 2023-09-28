@@ -33,14 +33,17 @@ impl Sandbox for App {
     fn update(&mut self, message: Message) {
         match message {
             Message::GetData => {
+                let mut user = loader::User::default();
 
-                loader::get_region_shard();
+                loader::get_region_shard(&mut user);
 
-                let lockfile = loader::get_lockfile();
-                let auth = auth::get_auth(&lockfile.unwrap());
+                let lockfile = loader::get_lockfile().unwrap();
+                let auth = auth::get_auth(&lockfile);
 
 
-                println!("{:?}", auth)
+
+
+                println!("{:?}", loader::get_client_version(&lockfile, &mut user))
             }
         }
     }

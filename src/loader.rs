@@ -11,6 +11,27 @@ pub struct User {
     pub shard: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct HostApp {
+    #[serde(rename = "host_app")]
+    pub host_app: ValClient,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ValClient {
+    #[serde(rename = "version")]
+    pub version: String,
+}
+
+impl Default for User {
+    fn default() -> Self {
+        Self {
+            region: String::from("eu"),
+            shard: String::from("eu"),
+        }
+    }
+}
+
 // Reads lockfile data from "C:\Users\User1\AppData\Local\Riot Games\Riot Client\Config" which contains the port and password to access local api
 pub fn get_lockfile() -> Option<Lockfile> {
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
@@ -41,7 +62,7 @@ pub fn get_lockfile() -> Option<Lockfile> {
     return None;
 }
 
-pub fn get_region_shard(user: &User) -> Option<bool>{
+pub fn get_region_shard(user: &mut User) -> Option<bool>{
     println!("REGION");
 
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
@@ -93,4 +114,26 @@ pub fn get_region_shard(user: &User) -> Option<bool>{
     }
 
     return None
+}
+
+pub fn get_client_version(lockfile: &Lockfile, user: &mut User) -> Option<HostApp> {
+    let client = match reqwest::blocking::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build() {
+            Ok(client) => client,
+            Err(_) => return None,
+    };
+
+    let res = match client.get(format!("https://127.0.0.1:{}/product-session/v1/external-sessions", &lockfile.port)).basic_auth("riot", Some(&lockfile.password)).send() {
+        Ok(response) => {
+            println!("{:?}", response);
+            response
+        },
+        Err(err) => {
+            println!("{:?}", err);    
+            return None;
+        },
+    };
+
+    return Some(res.json::<HostApp>().unwrap());
 }
