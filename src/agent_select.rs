@@ -9,51 +9,51 @@ pub struct PreGameId {
 #[derive(serde::Deserialize, Debug)]
 pub struct PreGame {
     #[serde(rename = "AllyTeam")]
-    ally_team: Team,
+    pub ally_team: Team,
 }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Team {
     #[serde(rename = "Players")]
-     players: Vec<Player>
+     pub players: Vec<Player>
 }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Player {
     #[serde(rename = "Subject")]
-    uuid: String,
+    pub uuid: String,
     #[serde(rename = "CharacterID")]
-    agent_id: String,
+    pub agent_id: String,
     #[serde(rename = "CharacterSelectionState")]
-    selection_state: String,
+    pub selection_state: String,
     #[serde(rename = "CompetitiveTier")]
-    rank: u8,
+    pub rank: u8,
     #[serde(rename = "PlayerIdentity")]
-    player_identity: PlayerIdentity
+    pub player_identity: PlayerIdentity
 }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct PlayerIdentity {
     #[serde(rename = "PlayerCardID")]
-    card_id: String,
+    pub card_id: String,
     #[serde(rename = "PlayerTitleID")]
-    title_id: String,
+    pub title_id: String,
     #[serde(rename = "AccountLevel")]
-    level: u16,
+    pub level: u16,
     #[serde(rename = "Incognito")]
-    incognito: bool,
+    pub incognito: bool,
     #[serde(rename = "HideAccountLevel")]
-    hide_level: bool,
+    pub hide_level: bool,
 }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct SeasonInfo {
     #[serde(rename = "NumberOfWins")]
-    wins: u16,
+    pub wins: u16,
     #[serde(rename = "Rank")]
-    rank: u16,
+    pub rank: u16,
     #[serde(rename = "LeaderboardRank")]
-    leaderboard_rank: u16,
+    pub leaderboard_rank: u16,
 }
 
 #[derive(Debug)]
@@ -87,11 +87,13 @@ impl PreGameId {
             }
         }
 
-        return Err(Error::Unknown);
+        println!("{:?}", resp);
+
+        return Err(Error::Unknown)
     }
 }
 
-pub fn get_pre_game(auth: &Authorization, user: &User, match_id: &PreGameId) -> Result<(), Error>{
+pub fn get_pre_game(auth: &Authorization, user: &User, match_id: &PreGameId) -> Result<PreGame, Error>{
     let client = match reqwest::blocking::Client::builder()
             .danger_accept_invalid_certs(true)
             .build() {
@@ -110,8 +112,10 @@ pub fn get_pre_game(auth: &Authorization, user: &User, match_id: &PreGameId) -> 
             }
         };
 
-    println!("{:?}", resp.json::<PreGame>().unwrap());
+    return Ok(resp.json::<PreGame>().unwrap())
 
-    return Ok(())
+    //println!("{:?}", resp.json::<PreGame>().unwrap());
+
+    //return Ok(())
 }
 

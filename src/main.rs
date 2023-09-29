@@ -1,66 +1,124 @@
 use std::fs::File;
 use std::io::Read;
 
-use iced::futures::lock;
-use iced::{Element, Sandbox, Settings};
-use iced::widget::{Button, button};
+use agent_select::*;
+use iced::{Element, Settings, Application, Command, Length, Renderer};
+use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable};
 
 mod loader;
 mod auth;
 mod party;
 mod agent_select;
 
-struct App;
+struct App {
+    state: State,
+    players: Option<Vec<Player>>,
+}
+
+enum State { Loading, Party, PreGame, Game }
+
 #[derive(Clone, Copy, Debug)]
 enum Message {
-    GetData,
+    Refresh,
+    LoadPreGamePlayers
 }
 
 fn main() -> iced::Result {
     App::run(Settings::default())
 }
 
-impl Sandbox for App {
+impl Application for App {
     type Message = Message;
+    type Theme = iced::Theme;
+    type Executor = iced::executor::Default;
+    type Flags = ();
 
-    fn new() -> Self {
-        Self
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        (
+            Self {
+                state: State::Loading, 
+                players: None, 
+             }
+            ,Command::none()
+        )
     }
 
     fn title(&self) -> String {
         String::from("Val+")
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            Message::GetData => {
-                let mut user = loader::User::default();
+            Message::Refresh => {
+                // let mut user = loader::User::default();
 
-                loader::get_region_shard(&mut user);
+                // loader::get_region_shard(&mut user);
                 
+
+                // let lockfile = loader::get_lockfile().unwrap();
+                // let auth = auth::get_auth(&lockfile).unwrap();
+
+
+                // loader::get_player_info(&mut user, &auth);
+                
+                // let val_client = loader::get_client_version(&lockfile, &mut user).unwrap();
+
+                // let party = party::get_party_id(&val_client.host_app, &user, &auth).unwrap();
+                // let pre_game = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
+
+                // agent_select::get_pre_game(&auth, &user, &pre_game);
+
+                //println!("{:?}", party::get_party_members(&user, &party, &auth));
+            }
+            Message::LoadPreGamePlayers => {
+                let mut user = loader::User::default();
+                loader::get_region_shard(&mut user);
 
                 let lockfile = loader::get_lockfile().unwrap();
                 let auth = auth::get_auth(&lockfile).unwrap();
 
-
                 loader::get_player_info(&mut user, &auth);
-                
-                let val_client = loader::get_client_version(&lockfile, &mut user).unwrap();
 
-                let party = party::get_party_id(&val_client.host_app, &user, &auth).unwrap();
-                let pre_game = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
+                let match_id = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
+                let pre_game = agent_select::get_pre_game(&auth, &user, &match_id).unwrap();
 
-                agent_select::get_pre_game(&auth, &user, &pre_game);
+                self.players = Some(pre_game.ally_team.players);
 
-                //println!("{:?}", party::get_party_members(&user, &party, &auth));
-
-
-            }
+                self.state = State::PreGame;
+            }            
         }
+        Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
-        button("Get Data").on_press(Message::GetData).into()
+    fn view(&self) -> Element<Message> {
+
+        //let mut column: Column<'_, Message, Renderer> = Column::new();
+
+        match &self.state {
+            State::PreGame => {
+                if let Some(players) = &self.players {
+                    let mut col = Column::new();
+                    
+                    for player in players {
+                        col = col.push(text(player.uuid.to_string()));
+                    }
+
+                    return col.into()
+                }
+            }
+            _ => {}
+        }
+
+        // let mut content = Column::new();
+
+        // for _i in 0..5 {
+        //     content = content.push(button("hl"))
+        // }
+
+        // content.into()
+        
+        button("Refresh").on_press(Message::LoadPreGamePlayers).into()
+        
     }
 }
 
