@@ -8,6 +8,7 @@ use iced::widget::{Button, button};
 mod loader;
 mod auth;
 mod party;
+mod agent_select;
 
 struct App;
 #[derive(Clone, Copy, Debug)]
@@ -47,8 +48,11 @@ impl Sandbox for App {
                 let val_client = loader::get_client_version(&lockfile, &mut user).unwrap();
 
                 let party = party::get_party_id(&val_client.host_app, &user, &auth).unwrap();
+                let pre_game = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
 
-                println!("{:?}", party::get_party_members(&user, &party, &auth));
+                agent_select::get_pre_game(&auth, &user, &pre_game);
+
+                //println!("{:?}", party::get_party_members(&user, &party, &auth));
 
 
             }
