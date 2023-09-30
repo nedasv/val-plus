@@ -2,8 +2,9 @@ use std::fs::File;
 use std::io::Read;
 
 use agent_select::*;
+use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
-use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable};
+use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, image, Image};
 
 mod loader;
 mod auth;
@@ -13,6 +14,7 @@ mod agent_select;
 struct App {
     state: State,
     players: Option<Vec<Player>>,
+    loader: Option<loader::Loader>,
 }
 
 enum State { Loading, Party, PreGame, Game }
@@ -34,10 +36,34 @@ impl Application for App {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+
+        let mut loader = loader::Loader::default();
+
+        if let Ok(_) = loader.get_agents() {
+            println!("{:?}", loader);
+
+            return (
+                Self {
+                    state: State::Loading, 
+                    players: None, 
+                    loader: Some(loader),
+                 }
+                ,Command::none()
+            )
+
+            //let agents = loader.agent_cache.unwrap().get_agent(uuid)
+
+            //println!("{:?}", loader.agent_cache.unwrap().data)
+
+        } else {
+            println!("UNSUCCESSFUL LOADING")
+        }
+
         (
             Self {
                 state: State::Loading, 
                 players: None, 
+                loader: None,
              }
             ,Command::none()
         )
@@ -100,7 +126,23 @@ impl Application for App {
                     let mut col = Column::new();
                     
                     for player in players {
-                        col = col.push(text(player.uuid.to_string()));
+                        let agents = self.loader.as_ref().unwrap().agent_cache.as_ref().unwrap();
+
+                        if let Some(agent) = agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()) {
+                            let image = agent.get_image().unwrap();
+                            let handle = Handle::from_memory(image.as_bytes());
+
+                            col = col.push(Image::new(handle))
+                        } 
+                        
+
+                        //let agent = 
+
+                        // let loader = &self.loader.as_ref().unwrap().agent_cache.unwrap();
+                        // let agent = &loader.get_agent(player.agent_id.clone()).unwrap();
+                        // let image = agent.get_image().unwrap();
+
+                        // col = col.push(Image::new(image));
                     }
 
                     return col.into()

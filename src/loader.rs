@@ -1,5 +1,96 @@
+use std::str::Bytes;
+
+use iced::widget::image::Handle;
+use image::DynamicImage;
+
 use crate::auth::Authorization;
 
+#[derive(Debug)]
+pub enum LoaderError { ResponseUnsuccessful, ResponseError, JsonError, AgentNotFound }
+
+#[derive(Debug)]
+pub struct Loader {
+    pub agent_cache: Option<Agents>,
+}
+
+impl Loader {
+    pub fn default() -> Self {
+        Self {
+            agent_cache: None,
+        }
+    }
+
+    pub fn get_agents(&mut self) -> Result<(), LoaderError> {
+        let client = reqwest::blocking::Client::new();
+
+        let resp = client.get("https://valorant-api.com/v1/agents")
+            .send();
+
+        if let Ok(resp) = resp {
+            if resp.status().is_success() {
+
+                if let Ok(resp) = resp.json::<Agents>() {
+                    self.agent_cache = Some(resp);
+                    return Ok(())
+                }
+
+                return Err(LoaderError::JsonError)
+            } else {
+                return Err(LoaderError::ResponseUnsuccessful)
+            }
+        } else {
+            return Err(LoaderError::ResponseError)
+        }
+    }
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct Agents {
+    pub data: Vec<Agent>,
+}
+
+// impl Agents {
+//     pub fn get_agent(&mut self, uuid: String) -> Result<Agent, LoaderError> {
+
+//         if let Some(agent) = self.data.iter().find(|x| x.uuid.cmp(&uuid).is_eq()) {
+//             return Ok(agent.clone())
+//         } 
+
+//         return Err(LoaderError::AgentNotFound)
+//     }
+// }
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct Agent {
+    pub uuid: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    #[serde(rename = "displayIcon")]
+    pub  display_icon: String,
+}
+
+impl Agent {
+    pub fn get_image(&self) -> Option<DynamicImage> {
+        let client = reqwest::blocking::Client::new();
+
+        let resp = match client.get(&self.display_icon)
+            .send() {
+                Ok(resp) => resp,
+                Err(_) => return None,
+        };
+
+        let bytes = resp.bytes().unwrap();
+        let image = image::load_from_memory(&bytes).unwrap();
+        //let byte = image.as_bytes();
+
+        //let handle = Handle::from_memory(byte.clone());
+
+        //let handle = Handle::from_memory(&bytes);
+        //let image = image::load_from_memory(&bytes).unwrap();
+
+        return Some(image)
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Lockfile {
