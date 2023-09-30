@@ -4,7 +4,8 @@ use std::io::Read;
 use agent_select::*;
 use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
-use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, image, Image};
+use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image};
+use loader::Agents;
 
 mod loader;
 mod auth;
@@ -14,7 +15,7 @@ mod agent_select;
 struct App {
     state: State,
     players: Option<Vec<Player>>,
-    loader: Option<loader::Loader>,
+    agents: Agents,
 }
 
 enum State { Loading, Party, PreGame, Game }
@@ -39,34 +40,47 @@ impl Application for App {
 
         let mut loader = loader::Loader::default();
 
-        if let Ok(_) = loader.get_agents() {
-            println!("{:?}", loader);
+        loader.get_agents().unwrap();
 
-            return (
-                Self {
-                    state: State::Loading, 
-                    players: None, 
-                    loader: Some(loader),
-                 }
-                ,Command::none()
-            )
-
-            //let agents = loader.agent_cache.unwrap().get_agent(uuid)
-
-            //println!("{:?}", loader.agent_cache.unwrap().data)
-
-        } else {
-            println!("UNSUCCESSFUL LOADING")
-        }
+        let agents = loader.agent_cache.unwrap();
 
         (
             Self {
-                state: State::Loading, 
-                players: None, 
-                loader: None,
-             }
-            ,Command::none()
+                state: State::Loading,
+                players: None,
+                agents: agents,
+            }, Command::none()
         )
+
+        // if let Ok(_) = loader.get_agents() {
+        //     let agents = loader.agent_cache.unwrap();
+        //     println!("{:?}", loader);
+
+        //     return (
+        //         Self {
+        //             state: State::Loading, 
+        //             players: None, 
+        //             agents: agents,
+        //          }
+        //         ,Command::none()
+        //     )
+
+        //     //let agents = loader.agent_cache.unwrap().get_agent(uuid)
+
+        //     //println!("{:?}", loader.agent_cache.unwrap().data)
+
+        // } else {
+        //     println!("UNSUCCESSFUL LOADING")
+        // }
+
+        // (
+        //     Self {
+        //         state: State::Loading, 
+        //         players: None, 
+        //         agents: None,
+        //      }
+        //     ,Command::none()
+        // )
     }
 
     fn title(&self) -> String {
@@ -122,18 +136,45 @@ impl Application for App {
 
         match &self.state {
             State::PreGame => {
-                if let Some(players) = &self.players {
+                println!("PREGAME VIEW MATCH");
+
+                let players = self.players.as_ref().unwrap();
+
+
+                // if let Some(players) = &self.players {
                     let mut col = Column::new();
                     
                     for player in players {
-                        let agents = self.loader.as_ref().unwrap().agent_cache.as_ref().unwrap();
+                        let agent = self.agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()).unwrap();
+                        let image_link = agent.display_icon.clone();
 
-                        if let Some(agent) = agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()) {
-                            let image = agent.get_image().unwrap();
-                            let handle = Handle::from_memory(image.as_bytes());
+                        let client = reqwest::blocking::Client::new();
 
-                            col = col.push(Image::new(handle))
-                        } 
+                        if let Ok(resp) = client.get(&image_link).send() {
+
+                            println!("RESP WAS OK");
+
+                            let bytes = resp.bytes().unwrap();
+                            let image = image::load_from_memory(&bytes).unwrap();
+                            let byte = image.as_bytes().to_owned();
+                            let handle = Handle::from_pixels(256, 256, byte);
+
+                            col = col.push(Image::new(handle));
+
+                            //println!("{:?}", col);
+                        }
+
+                        
+
+
+                        // let agents = self.loader.as_ref().unwrap().agent_cache.as_ref().unwrap();
+
+                        // if let Some(agent) = agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()) {
+                        //     let image = agent.get_image().unwrap();
+                        //     let handle = Handle::from_memory(image.as_bytes());
+
+                        //     col = col.push(Image::new(handle))
+                        // } 
                         
 
                         //let agent = 
@@ -145,10 +186,21 @@ impl Application for App {
                         // col = col.push(Image::new(image));
                     }
 
-                    return col.into()
-                }
+                    // return container(
+                    //     col.into()
+                    // ).into();
+                    
+
+                    Container::new(
+                        col
+                    ).into()
+
+                    //col.into()
+                
             }
-            _ => {}
+            _ => {
+                button("Refresh").on_press(Message::LoadPreGamePlayers).into()
+            }
         }
 
         // let mut content = Column::new();
@@ -159,7 +211,7 @@ impl Application for App {
 
         // content.into()
         
-        button("Refresh").on_press(Message::LoadPreGamePlayers).into()
+        
         
     }
 }
