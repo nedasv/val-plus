@@ -142,7 +142,9 @@ impl Application for App {
 
 
                 // if let Some(players) = &self.players {
-                    let mut col = Column::new();
+                    let mut col = Column::new()
+                        .height(Length::Fill)
+                        .width(Length::Fill);
                     
                     for player in players {
                         let agent = self.agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()).unwrap();
@@ -192,8 +194,12 @@ impl Application for App {
                     
 
                     Container::new(
-                        col
-                    ).into()
+                        scrollable(
+                            col
+                        )
+                    )
+                    .height(Length::Fill)
+                    .into()
 
                     //col.into()
                 
