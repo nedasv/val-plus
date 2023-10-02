@@ -27,7 +27,14 @@ enum Message {
 }
 
 fn main() -> iced::Result {
-    App::run(Settings::default())
+    App::run(Settings {
+        window: iced::window::Settings {
+            size: (800, 800),
+            resizable:  false,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
 impl Application for App {
