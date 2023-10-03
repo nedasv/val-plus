@@ -170,7 +170,7 @@ impl Application for App {
 
                             
 
-                            col = col.push(row!(Image::new(handle), text("hello")));
+                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank))));
 
                             //println!("{:?}", col);
                         }
