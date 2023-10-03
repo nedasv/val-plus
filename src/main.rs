@@ -4,7 +4,7 @@ use std::io::Read;
 use agent_select::*;
 use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
-use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image};
+use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image, row};
 use loader::Agents;
 
 mod loader;
@@ -29,7 +29,7 @@ enum Message {
 fn main() -> iced::Result {
     App::run(Settings {
         window: iced::window::Settings {
-            size: (800, 800),
+            size: (1280, 800),
             resizable:  false,
             ..Default::default()
         },
@@ -168,7 +168,9 @@ impl Application for App {
                             let byte = image.as_bytes().to_owned();
                             let handle = Handle::from_pixels(256, 256, byte);
 
-                            col = col.push(Image::new(handle));
+                            
+
+                            col = col.push(row!(Image::new(handle), text("hello")));
 
                             //println!("{:?}", col);
                         }
