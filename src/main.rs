@@ -18,6 +18,13 @@ struct App {
     agents: Agents,
 }
 
+fn id_to_rank(id: u8) -> String {
+    //let ranks: [&str; 10] = ["Iron 1", "Iron 2", "Iron 3", "Bronze"];
+
+
+    return String::from("hello")
+}
+
 enum State { Loading, Party, PreGame, Game }
 
 #[derive(Clone, Copy, Debug)]

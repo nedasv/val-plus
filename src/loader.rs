@@ -1,64 +1,12 @@
-use std::str::Bytes;
-
-use iced::widget::image::Handle;
-use image::DynamicImage;
-
 use crate::auth::Authorization;
 
 #[derive(Debug)]
-pub enum LoaderError { ResponseUnsuccessful, ResponseError, JsonError, AgentNotFound }
-
-#[derive(Debug)]
-pub struct Loader {
-    pub agent_cache: Option<Agents>,
-}
-
-impl Loader {
-    pub fn default() -> Self {
-        Self {
-            agent_cache: None,
-        }
-    }
-
-    pub fn get_agents(&mut self) -> Result<(), LoaderError> {
-        let client = reqwest::blocking::Client::new();
-
-        let resp = client.get("https://valorant-api.com/v1/agents")
-            .send();
-
-        if let Ok(resp) = resp {
-            if resp.status().is_success() {
-
-                if let Ok(resp) = resp.json::<Agents>() {
-                    self.agent_cache = Some(resp);
-                    return Ok(())
-                }
-
-                return Err(LoaderError::JsonError)
-            } else {
-                return Err(LoaderError::ResponseUnsuccessful)
-            }
-        } else {
-            return Err(LoaderError::ResponseError)
-        }
-    }
-}
+pub enum LoaderError { ResponseUnsuccessful, ResponseError, JsonError, AgentNotFound, CreationError(String), Unavailable }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Agents {
     pub data: Vec<Agent>,
 }
-
-// impl Agents {
-//     pub fn get_agent(&mut self, uuid: String) -> Result<Agent, LoaderError> {
-
-//         if let Some(agent) = self.data.iter().find(|x| x.uuid.cmp(&uuid).is_eq()) {
-//             return Ok(agent.clone())
-//         } 
-
-//         return Err(LoaderError::AgentNotFound)
-//     }
-// }
 
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct Agent {
@@ -69,28 +17,115 @@ pub struct Agent {
     pub  display_icon: String,
 }
 
-impl Agent {
-    pub fn get_image(&self) -> Option<DynamicImage> {
+#[derive(serde::Deserialize, Debug)]
+pub struct Ranks {
+    pub data: Tier,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct Tier {
+    pub tiers: Vec<Rank>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct Rank {
+    #[serde(rename = "tier")]
+    pub rank: u8,
+    #[serde(rename = "tierName")]
+    pub rank_name: String,
+    #[serde(rename = "smallIcon")]
+    pub small_icon_link: String,
+}
+
+#[derive(Debug)]
+pub struct Loader {
+    pub agents: Vec<Agent>,
+    pub ranks: Vec<Rank>
+}
+
+impl Loader {
+    pub fn new(&self) -> Result<Self, LoaderError> {
         let client = reqwest::blocking::Client::new();
 
-        let resp = match client.get(&self.display_icon)
-            .send() {
-                Ok(resp) => resp,
-                Err(_) => return None,
+        let agents = match Loader::get_agents(&client) {
+            Ok(agents) => agents,
+            Err(err) => return Err(err),
         };
 
-        let bytes = resp.bytes().unwrap();
-        let image = image::load_from_memory(&bytes).unwrap();
-        //let byte = image.as_bytes();
+        let ranks = match Loader::get_ranks(&client) {
+            Ok(ranks) => ranks,
+            Err(err) => return Err(err),
+        };
 
-        //let handle = Handle::from_memory(byte.clone());
+        Ok(Self {
+            agents,
+            ranks,
+        })
+    }
 
-        //let handle = Handle::from_memory(&bytes);
-        //let image = image::load_from_memory(&bytes).unwrap();
+    pub fn get_agents(client: &reqwest::blocking::Client) -> Result<Vec<Agent>, LoaderError> {
+        let resp = match client.get("https://valorant-api.com/v1/agents")
+            .send() {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let agents = match resp.json::<Agents>() {
+                            Ok(agents) => agents,
+                            Err(_) => return Err(LoaderError::CreationError(String::from("Agents: Error converting response to json")))
+                        };
 
-        return Some(image)
+                        return Ok(agents.data);
+
+                    } else {
+                        return Err(LoaderError::Unavailable)
+                    }
+                },
+                Err(err) => return Err(LoaderError::CreationError(String::from("Agents: Response was unsuccesful")))
+            };
+    }
+
+    pub fn get_ranks(client: &reqwest::blocking::Client) -> Result<Vec<Rank>, LoaderError> {
+        let resp = match client.get("https://valorant-api.com/v1/competitivetiers")
+            .send() {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let ranks = match resp.json::<Ranks>() {
+                            Ok(ranks) => ranks,
+                            Err(_) => return Err(LoaderError::CreationError(String::from("Ranks: Error converting response to json")))
+                        };
+
+                        return Ok(ranks.data.tiers);
+
+                    } else {
+                        return Err(LoaderError::Unavailable)
+                    }
+                },
+                Err(err) => return Err(LoaderError::CreationError(String::from("Ranks: Response was unsuccesful")))
+            };
     }
 }
+
+// impl Agent {
+//     pub fn get_image(&self) -> Option<DynamicImage> {
+//         let client = reqwest::blocking::Client::new();
+
+//         let resp = match client.get(&self.display_icon)
+//             .send() {
+//                 Ok(resp) => resp,
+//                 Err(_) => return None,
+//         };
+
+//         let bytes = resp.bytes().unwrap();
+//         let image = image::load_from_memory(&bytes).unwrap();
+//         //let byte = image.as_bytes();
+
+//         //let handle = Handle::from_memory(byte.clone());
+
+//         //let handle = Handle::from_memory(&bytes);
+//         //let image = image::load_from_memory(&bytes).unwrap();
+
+//         return Some(image)
+//     }
+// }
 
 #[derive(Debug, Default)]
 pub struct Lockfile {
@@ -260,4 +295,8 @@ pub fn get_player_info(user: &mut User, auth: &Authorization) {
 
     let info = res.json::<UserId>().unwrap();
     user.puuid = info.puuid.clone();
+}
+
+pub fn get_ranks() {
+
 }
