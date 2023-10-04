@@ -19,11 +19,13 @@ pub struct Agent {
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Ranks {
-    pub data: Tier,
+    #[serde(rename = "data")]
+    pub data: Vec<Tier>,
 }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Tier {
+    #[serde(rename = "tiers")]
     pub tiers: Vec<Rank>,
 }
 
@@ -34,17 +36,17 @@ pub struct Rank {
     #[serde(rename = "tierName")]
     pub rank_name: String,
     #[serde(rename = "smallIcon")]
-    pub small_icon_link: String,
+    pub small_icon_link: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct Loader {
     pub agents: Vec<Agent>,
-    pub ranks: Vec<Rank>
+    pub ranks: Vec<Tier>
 }
 
 impl Loader {
-    pub fn new(&self) -> Result<Self, LoaderError> {
+    pub fn new() -> Result<Self, LoaderError> {
         let client = reqwest::blocking::Client::new();
 
         let agents = match Loader::get_agents(&client) {
@@ -83,17 +85,25 @@ impl Loader {
             };
     }
 
-    pub fn get_ranks(client: &reqwest::blocking::Client) -> Result<Vec<Rank>, LoaderError> {
+    pub fn get_ranks(client: &reqwest::blocking::Client) -> Result<Vec<Tier>, LoaderError> {
         let resp = match client.get("https://valorant-api.com/v1/competitivetiers")
             .send() {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         let ranks = match resp.json::<Ranks>() {
-                            Ok(ranks) => ranks,
-                            Err(_) => return Err(LoaderError::CreationError(String::from("Ranks: Error converting response to json")))
+                            Ok(ranks) => ranks.data,
+                            Err(err) => {
+                                println!("{:?}", err);
+                                return Err(LoaderError::CreationError(String::from("Ranks: Error converting response to json")))
+                            }
                         };
 
-                        return Ok(ranks.data.tiers);
+                        // let tiers = match ranks.data.get(4) {
+                        //     Some(tiers) => tiers,
+                        //     None => return Err(LoaderError::JsonError)
+                        // };
+
+                        return Ok(ranks);
 
                     } else {
                         return Err(LoaderError::Unavailable)
@@ -295,8 +305,4 @@ pub fn get_player_info(user: &mut User, auth: &Authorization) {
 
     let info = res.json::<UserId>().unwrap();
     user.puuid = info.puuid.clone();
-}
-
-pub fn get_ranks() {
-
 }

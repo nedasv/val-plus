@@ -5,7 +5,7 @@ use agent_select::*;
 use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
 use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image, row};
-use loader::Agents;
+use loader::{Agents, Agent};
 
 mod loader;
 mod auth;
@@ -15,7 +15,7 @@ mod agent_select;
 struct App {
     state: State,
     players: Option<Vec<Player>>,
-    agents: Agents,
+    agents: Vec<Agent>,
 }
 
 fn id_to_rank(id: u8) -> String {
@@ -52,17 +52,18 @@ impl Application for App {
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
 
-        let mut loader = loader::Loader::default();
+        let mut loader = loader::Loader::new().unwrap();
 
-        loader.get_agents().unwrap();
+        println!("{:?}", loader);
 
-        let agents = loader.agent_cache.unwrap();
+        //loader.get_agents().unwrap();
+        //let agents = loader.agent_cache.unwrap();
 
         (
             Self {
                 state: State::Loading,
                 players: None,
-                agents: agents,
+                agents: loader.agents,
             }, Command::none()
         )
 
@@ -161,7 +162,7 @@ impl Application for App {
                         .width(Length::Fill);
                     
                     for player in players {
-                        let agent = self.agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()).unwrap();
+                        let agent = self.agents.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()).unwrap();
                         let image_link = agent.display_icon.clone();
 
                         let client = reqwest::blocking::Client::new();
@@ -181,9 +182,6 @@ impl Application for App {
 
                             //println!("{:?}", col);
                         }
-
-                        
-
 
                         // let agents = self.loader.as_ref().unwrap().agent_cache.as_ref().unwrap();
 
