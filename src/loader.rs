@@ -1,3 +1,5 @@
+use iced::widget::image::Handle;
+
 use crate::auth::Authorization;
 
 #[derive(Debug)]
@@ -111,6 +113,25 @@ impl Loader {
                 },
                 Err(err) => return Err(LoaderError::CreationError(String::from("Ranks: Response was unsuccesful")))
             };
+    }
+}
+
+impl Rank {
+    pub fn get_image(&self) -> Result<Handle, LoaderError> {
+        let client = reqwest::blocking::Client::new();
+
+        let resp = match client.get(&self.small_icon_link.as_ref().unwrap().to_owned()).send() {
+            Ok(resp) => {
+                let bytes = resp.bytes().unwrap();
+                let image = image::load_from_memory(&bytes).unwrap();
+                let byte = image.as_bytes().to_owned();
+                let handle = Handle::from_pixels(64, 64, byte);
+
+                return Ok(handle);
+
+            },
+            Err(_) => return Err(LoaderError::ResponseError),
+        };
     }
 }
 

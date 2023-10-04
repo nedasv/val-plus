@@ -5,7 +5,7 @@ use agent_select::*;
 use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
 use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image, row};
-use loader::{Agents, Agent};
+use loader::{Agents, Agent, Tier};
 
 mod loader;
 mod auth;
@@ -16,6 +16,7 @@ struct App {
     state: State,
     players: Option<Vec<Player>>,
     agents: Vec<Agent>,
+    ranks: Vec<Tier>,
 }
 
 fn id_to_rank(id: u8) -> String {
@@ -64,6 +65,7 @@ impl Application for App {
                 state: State::Loading,
                 players: None,
                 agents: loader.agents,
+                ranks: loader.ranks,
             }, Command::none()
         )
 
@@ -176,9 +178,14 @@ impl Application for App {
                             let byte = image.as_bytes().to_owned();
                             let handle = Handle::from_pixels(256, 256, byte);
 
+                            let tiers = self.ranks.get(4).unwrap();
+                            let rank = tiers.tiers.get(player.rank as usize).unwrap();
+
+                            println!("{:?}", rank);
+
                             
 
-                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank))));
+                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank)), Image::new(rank.get_image().unwrap())));
 
                             //println!("{:?}", col);
                         }
