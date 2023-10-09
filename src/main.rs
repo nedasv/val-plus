@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Read;
 
 use agent_select::*;
+use iced::futures::lock;
 use iced::widget::image::Handle;
 use iced::{Element, Settings, Application, Command, Length, Renderer};
 use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image, row};
@@ -11,6 +12,7 @@ mod loader;
 mod auth;
 mod party;
 mod agent_select;
+mod presence;
 
 struct App {
     state: State,
@@ -139,8 +141,9 @@ impl Application for App {
                 let match_id = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
                 let pre_game = agent_select::get_pre_game(&auth, &user, &match_id).unwrap();
 
-                self.players = Some(pre_game.ally_team.players);
+                let pres = presence::Presence::new().load(&lockfile);
 
+                self.players = Some(pre_game.ally_team.players);
                 self.state = State::PreGame;
             }            
         }
@@ -183,36 +186,9 @@ impl Application for App {
 
                             println!("{:?}", rank);
 
-                            
-
-                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank)), Image::new(rank.get_image().unwrap())));
-
-                            //println!("{:?}", col);
+                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank)), Image::new(rank.get_image().unwrap())))
                         }
-
-                        // let agents = self.loader.as_ref().unwrap().agent_cache.as_ref().unwrap();
-
-                        // if let Some(agent) = agents.data.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()) {
-                        //     let image = agent.get_image().unwrap();
-                        //     let handle = Handle::from_memory(image.as_bytes());
-
-                        //     col = col.push(Image::new(handle))
-                        // } 
-                        
-
-                        //let agent = 
-
-                        // let loader = &self.loader.as_ref().unwrap().agent_cache.unwrap();
-                        // let agent = &loader.get_agent(player.agent_id.clone()).unwrap();
-                        // let image = agent.get_image().unwrap();
-
-                        // col = col.push(Image::new(image));
                     }
-
-                    // return container(
-                    //     col.into()
-                    // ).into();
-                    
 
                     Container::new(
                         scrollable(
@@ -221,9 +197,6 @@ impl Application for App {
                     )
                     .height(Length::Fill)
                     .into()
-
-                    //col.into()
-                
             }
             _ => {
                 button("Refresh").on_press(Message::LoadPreGamePlayers).into()
