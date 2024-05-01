@@ -89,6 +89,7 @@ struct MyApp {
     selected_user: Option<u8>,
 
     promise: Option<Promise<Option<(Vec<LoadedPlayer>, String)>>>,
+    image_promise: Option<Promise<Option<(MapDetail, AgentDetail)>>>,
 
     map_icon_cache: Option<MapDetail>,
     agent_icon_cache: Option<AgentDetail>,
@@ -96,6 +97,7 @@ struct MyApp {
 
 #[derive(Debug, Clone, PartialEq)]
 enum State {
+    Load,
     Refresh,
     ButtonRefresh,
     WaitValorant,
@@ -243,6 +245,20 @@ impl eframe::App for MyApp {
 
             match &self.state {
 
+                State::Load => {
+                    self.image_promise = Some(Promise::spawn_thread("load_images", || {
+                        if let Ok(agent_cache) = r#match::CurrentGamePlayer::get_agent_details() {
+                            if let Ok(map_cache) = r#match::CurrentGamePlayer::get_map_details() {
+                               return Some((map_cache, agent_cache))
+                            }
+                        }
+
+                        return None
+                    }));
+
+                    self.state = State::CheckPromise;
+                }
+
                 State::Settings => {
                     ui.horizontal(|ui| {
                         ui.label("Auto Refresh: ");
@@ -256,20 +272,12 @@ impl eframe::App for MyApp {
 
                         // check for lockfile
 
-                        if let Ok(agent_cache) = r#match::CurrentGamePlayer::get_agent_details() {
-                            self.agent_icon_cache = Some(agent_cache);
-                        }
-
-                        if let Ok(map_cache) = r#match::CurrentGamePlayer::get_map_details() {
-                            self.map_icon_cache = Some(map_cache);
-                        }
-
                         if let Some(auth) = RiotAuth::load() {
                             self.auth = Some(auth);
-                            self.state = State::Refresh;
+                            self.state = State::Load;
                         }
                     } else {
-                        //thread::sleep(Duration::from_secs(self.settings.wait_time));
+                        // do something while not?
                     }
                 }
 
@@ -330,6 +338,27 @@ impl eframe::App for MyApp {
                             self.state = State::Refresh;
                         }
                     }
+
+                    if let Some(promise) = &self.image_promise {
+                        if let Some(promise) = promise.ready() {
+                            match promise {
+                                Some((maps, agents)) => {
+                                    self.map_icon_cache = Some(maps.clone());
+                                    self.agent_icon_cache = Some(agents.clone());
+                                }
+                                None => {
+                                    println!("promise returned None");
+                                    // returns none (so not exist?)
+                                    //self.loaded_players = None;
+                                    self.promise = None;
+                                }
+                            }
+
+                        } else {
+                            self.state = State::CheckPromise;
+                            ui.label("Loading images...");
+                        }
+                    }
                 }
 
                 _ => {
@@ -343,18 +372,9 @@ impl eframe::App for MyApp {
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (i, player) in players.iter().enumerate() {
-                        //println!("{:?}", player.match_details);
                         
                         if player.times_played > 0 {
 
-                            //println!("{:?}", player);
-
-                            //println!("{:?}", ui.input(|i| i.sc));
-
-                            //ui.push_id(i, |ui| {
-                            //egui::ScrollArea::vertical().show(ui, |ui| {
-
-                            //ui.image("https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.seekpng.com%2Fpng%2Fdetail%2F966-9665317_placeholder-image-person-jpg.png&f=1&nofb=1&ipt=35e81c529261e9c3536ba925657b4dbc9f7c8dc97ee19c347059583f9655712a&ipo=images");
 
                             let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.seekpng.com%2Fpng%2Fdetail%2F966-9665317_placeholder-image-person-jpg.png&f=1&nofb=1&ipt=35e81c529261e9c3536ba925657b4dbc9f7c8dc97ee19c347059583f9655712a&ipo=images".to_string();
 
@@ -364,15 +384,7 @@ impl eframe::App for MyApp {
                             }
 
 
-                            // ui.vertical_centered(|ui| {
-                            //
-                            //     ui.add(
-                            //         egui::Image::new(agent_icon_url)
-                            //             .max_width(50.0)
-                            //     );
-                            //
-                            //     ui.colored_label(egui::Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
-                            // });
+
 
                             ui.horizontal(|ui| {
                                 ui.add(
@@ -402,14 +414,11 @@ impl eframe::App for MyApp {
                                     }
                                 }
 
-                                //ui.add_space(ui.available_width() - 80.0);
+
 
                             });
 
-                            // let mut style: egui::Style = (*ui.ctx().style()).clone();
-                            // style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(200, 200, 200);
-                            // style.visuals.widgets.noninteractive.corner_radius = 10.0;
-                            // ui.ctx().set_style(style);
+
 
                             if let Some(index) = self.selected_user {
                                 if i == index.to_owned() as usize {
@@ -427,29 +436,14 @@ impl eframe::App for MyApp {
                                         }
                                     }
 
-                                    //egui::ScrollArea::vertical().show(ui, |ui| {
+
                                     if let Some(history) = &player.match_history {
 
                                         ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                        //println!("hisotyr part");
+
                                         for (i, log) in history.iter().rev().enumerate() {
-                                            // if let Some(match_id) = &log.match_id {
-                                            //     println!("label part");
-                                            //
-                                            //     ui.label(match_id.clone());
-                                            // }
 
-                                            // let rect = egui::Rect::from_min_size(Pos2::new(100.0, i as f32 * 105.0 - ui.input(|i| i.raw_scroll_delta.y)), egui::Vec2::new(ui.max_rect().width(), 100.0));
-                                            // let corner_radius = 10.0;
-                                            // ui.painter().rect_filled(rect, corner_radius, Color32::BLACK);
-                                            //
-                                            // // Add a dummy widget of the same size as the painted rectangle
-                                            //
-                                            //
-                                            // ui.allocate_space(egui::Vec2::new(ui.max_rect().width(), 100.0));
-
-                                            // Create a custom widget that takes up space in the layout
 
                                             let mut map_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
                                             let mut map_name = "Unknown".to_string();
@@ -458,12 +452,6 @@ impl eframe::App for MyApp {
 
 
                                             if let Some(map_icons) = &self.map_icon_cache {
-                                                // println!("{:?}", map_icons);
-                                                // println!("{:?}", log.map_id.clone().unwrap());
-                                                //
-                                                // for icon in &map_icons.data {
-                                                //     println!("{:?}", icon.path);
-                                                // }
                                                 let map = map_icons.data.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
 
                                                 if let Some(agent_icons) = &self.agent_icon_cache {
@@ -518,138 +506,20 @@ impl eframe::App for MyApp {
                                                                 .rounding(10.0)
                                                         );
                                                     });
-
-
-                                                    // ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-                                                    //
-                                                    //     ui.add(
-                                                    //         egui::Image::new(map_icon_url)
-                                                    //             .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                    //             .maintain_aspect_ratio(false)
-                                                    //             .rounding(10.0)
-                                                    //     );
-                                                    //
-                                                    //
-                                                    //
-                                                    //     // //ui.vertical(|ui| {
-                                                    //     //     //ui.add_space(25.0);
-                                                    //     //
-                                                    //     //     ui.horizontal(|ui| {
-                                                    //     //         ui.colored_label(Color32::WHITE, map_name);
-                                                    //     //         ui.colored_label(Color32::WHITE, enemy);
-                                                    //     //     });
-                                                    //     //
-                                                    //     //     ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
-                                                    //     // //});
-                                                    //     //
-                                                    //     // ui.add(
-                                                    //     //     egui::Image::new(agent_icon_url)
-                                                    //     //         .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                    //     //         .maintain_aspect_ratio(false)
-                                                    //     //         .rounding(10.0)
-                                                    //     // );
-                                                    //
-                                                    //
-                                                    // });
-                                                    //
-                                                    // ui.with_layout(Layout::left_to_right(egui::Align::Center), |ui| {
-                                                    //
-                                                    //     ui.add(
-                                                    //         egui::Image::new(agent_icon_url)
-                                                    //             .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                    //             .maintain_aspect_ratio(false)
-                                                    //             .rounding(10.0)
-                                                    //     );
-                                                    //
-                                                    //
-                                                    //
-                                                    //     // //ui.vertical(|ui| {
-                                                    //     //     //ui.add_space(25.0);
-                                                    //     //
-                                                    //     //     ui.horizontal(|ui| {
-                                                    //     //         ui.colored_label(Color32::WHITE, map_name);
-                                                    //     //         ui.colored_label(Color32::WHITE, enemy);
-                                                    //     //     });
-                                                    //     //
-                                                    //     //     ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
-                                                    //     // //});
-                                                    //     //
-                                                    //     // ui.add(
-                                                    //     //     egui::Image::new(agent_icon_url)
-                                                    //     //         .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                    //     //         .maintain_aspect_ratio(false)
-                                                    //     //         .rounding(10.0)
-                                                    //     // );
-                                                    //
-                                                    //
-                                                    // });
-
-
-                                                    // ui.vertical_centered_justified(|ui| {
-                                                    //
-                                                    //     //ui.add_space(25.0);
-                                                    //
-                                                    //
-                                                    //
-                                                    //     ui.colored_label(Color32::WHITE,"(2391 days ago)");
-                                                    // });
                                                 });
-
-                                            //ui.add_space(5.0);
-
-
-                                            // egui::Frame::dark_canvas(ui.style()).corner_radius(10.0).show(ui, |ui| {
-                                            //     ui.label(format!("Played: {}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
-                                            // });
-
-
-                                            // ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-                                            // //ui.label(log.match_id.as_ref().unwrap().clone());
-                                            // ui.label(format!("Played: {}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
-
-
                                         }
                                     } else {
                                         ui.label("No history");
                                     }
-                                    //});
-
-
                                 }
                             }
 
-                            // ui.vertical_centered(|ui| {
-                            //     if let Some(history) = &player.match_history {
-                            //         let button = ui.button(format!("Show History ({})", history.len()));
-                            //
-                            //         if button.clicked() {
-                            //             if let Some(index) = self.selected_user {
-                            //                 if i == index.to_owned() as usize {
-                            //                     // USER CLICKED ALREADY SELECTED
-                            //                     self.selected_user = None;
-                            //                 }  else {
-                            //                     self.selected_user = Some(i as u8);
-                            //                 }
-                            //             } else {
-                            //                 self.selected_user = Some(i as u8);
-                            //             }
-                            //         }
-                            //     }
-                            // });
-
                             ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-                            //});
-                            //});
-
-                            ui.label("Made by: nedasv | Discord: 3eu");
-
-
                         }
                     }
+
+                    ui.label("Made by: nedasv | Discord: 3eu");
                 });
-
-                // render players
-
             }
         });
     }

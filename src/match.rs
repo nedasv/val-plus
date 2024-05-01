@@ -8,12 +8,12 @@ pub struct MatchHandler {
     pub match_id: String,
 }
 
-#[derive(serde::Deserialize, Debug, Default)]
+#[derive(serde::Deserialize, Debug, Default, Clone)]
 pub struct AgentDetail {
    pub data: Vec<AgentDetailData>,
 }
 
-#[derive(serde::Deserialize, Debug, Default)]
+#[derive(serde::Deserialize, Debug, Default, Clone)]
 pub struct AgentDetailData {
     #[serde(rename = "uuid")]
     pub uuid: String,
