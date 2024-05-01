@@ -1,6 +1,4 @@
-use std::io::Read;
 use std::time::{SystemTime, UNIX_EPOCH};
-use eframe::egui::Rounding;
 use crate::{RiotAuth, LoadedPlayer, name_service, TeamType};
 use crate::database;
 use crate::database::{MatchHistory, NameHistory};
@@ -170,20 +168,13 @@ impl CurrentGamePlayer {
             }
         };
 
-        //println!("{:?}", resp.text());
-
         if resp.status().is_success() {
-
-            //println!("{:?}", resp.json::<CurrentGameMatch>());
-
             return if let Ok(pre_game) = resp.json::<CurrentGameMatch>() {
                 Ok(pre_game)
             } else {
                 Err(Error::NotPreGame)
             }
         }
-
-        //println!("{:?}", resp);
 
         return Err(Error::Unknown)
     }
@@ -200,7 +191,6 @@ impl CurrentGamePlayer {
             .send() {
             Ok(resp) => resp,
             Err(err) => {
-                println!("{:?}", err);
                 return Err(Error::RiotError)
             }
         };
@@ -212,8 +202,6 @@ impl CurrentGamePlayer {
                 Err(Error::NotPreGame)
             }
         }
-
-        println!("{:?}", resp);
 
         return Err(Error::Unknown)
     }
@@ -235,8 +223,6 @@ impl CurrentGamePlayer {
             }
         };
 
-
-
         if resp.status().is_success() {
             return match resp.json::<MapDetail>() {
                 Ok(map_detail) => {
@@ -249,55 +235,20 @@ impl CurrentGamePlayer {
             }
         }
 
-
         return Err(Error::Unknown)
     }
-
-    // pub fn get_match_details(auth: &RiotAuth, match_id: String) -> Result<MatchDetails, Error> {
-    //     let client = match reqwest::blocking::Client::builder()
-    //         .danger_accept_invalid_certs(true)
-    //         .build() {
-    //         Ok(client) => client,
-    //         Err(_) => return Err(Error::ClientError),
-    //     };
-    //
-    //     let resp = match client.get(format!("https://pd.{}.a.pvp.net/match-details/v1/matches/{}", auth.shard, match_id))
-    //         .bearer_auth(&auth.access_token)
-    //         .header("X-Riot-Entitlements-JWT", &auth.token)
-    //         .header("X-Riot-ClientPlatform", "ew0KCSJwbGF0Zm9ybVR5cGUiOiAiUEMiLA0KCSJwbGF0Zm9ybU9TIjogIldpbmRvd3MiLA0KCSJwbGF0Zm9ybU9TVmVyc2lvbiI6ICIxMC4wLjE5MDQyLjEuMjU2LjY0Yml0IiwNCgkicGxhdGZvcm1DaGlwc2V0IjogIlVua25vd24iDQp9")
-    //         .header("X-Riot-ClientVersion", &auth.client_ver)
-    //         .send() {
-    //         Ok(resp) => resp,
-    //         Err(err) => {
-    //             println!("{:?}", err);
-    //             return Err(Error::RiotError)
-    //         }
-    //     };
-    //
-    //     if resp.status().is_success() {
-    //         return if let Ok(match_details) = resp.json::<MatchDetails>() {
-    //             Ok(match_details)
-    //         } else {
-    //             Err(Error::NotPreGame)
-    //         }
-    //     }
-    //
-    //     println!("{:?}", resp.text());
-    //
-    //     return Err(Error::Unknown)
-    // }
 
     pub fn get_players(auth: RiotAuth, prev_match_id: String) -> Result<(Vec<LoadedPlayer>, String), Error> {
         let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
-        if let Ok(match_id) = self::CurrentGamePlayer::get_match_id(&auth) {
+        if let Ok(match_id) = CurrentGamePlayer::get_match_id(&auth) {
 
             if prev_match_id == match_id {
                 println!("same match id");
                 return Err(Error::NotPreGame)
             }
 
-            if let Ok(current_match) = self::CurrentGamePlayer::get_match(&auth, match_id.clone()) {
+            if let Ok(current_match) = CurrentGamePlayer::get_match(&auth, match_id.clone()) {
                 let player_ids: Vec<String> = current_match.players.iter().map(|player| player.player_identity.uuid.clone()).collect();
 
                 if let Ok(player_names) = name_service::NameService::get_names(&auth, player_ids) {

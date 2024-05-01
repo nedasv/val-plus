@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 use turbosql::{execute, select, Turbosql};
 use crate::auth::get_auth;
-use crate::loader::{get_client_version, get_lockfile, get_player_info, get_region_shard};
+//use crate::loader::{get_client_version, get_lockfile, get_player_info, get_region_shard};
+use crate::loader::Loader;
 
 use std::time;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -19,7 +20,11 @@ mod pre_game;
 mod r#match;
 mod name_service;
 mod database;
-mod match_handler;
+
+pub enum ApplicationError {
+    RetryError(String),
+    RestartError(String),
+}
 
 #[derive(Debug, Clone)]
 struct LoadedPlayer {
@@ -87,7 +92,6 @@ struct MyApp {
 
     map_icon_cache: Option<MapDetail>,
     agent_icon_cache: Option<AgentDetail>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -178,18 +182,18 @@ impl RiotAuth {
     fn load() -> Option<Self> {
         // TODO: check if lockfile exists, keep checking until it does
 
-        println!("{:?}", database::add_user("abc123".to_string()));
-        println!("{:?}", database::get_user("abc123".to_string()));
-        println!("{:?}", database::update_user("abc123".to_string()));
-        println!("{:?}", database::get_user("abc123".to_string()));
+        let loader = Loader::new();
 
-        if let Ok(lockfile) = get_lockfile() {
+        if let Some(lockfile) = loader.get_port_and_password() {
+            println!("{:?}", lockfile);
             if let Ok(tokens) = get_auth(lockfile.0.clone(), lockfile.1.clone()) {
-                if let Ok(region_shard) = get_region_shard() {
+                println!("here2");
+                if let Some(region_shard) = loader.get_region_and_shard() {
+                    println!("here3");
                     return Some(Self {
                         access_token: tokens.1.clone(),
-                        client_ver: get_client_version(lockfile.0.clone(), lockfile.1.clone()).unwrap(),
-                        puuid: get_player_info(tokens.1.clone()).unwrap(),
+                        client_ver: loader.get_client_version(lockfile.0.clone(), lockfile.1.clone()).unwrap(),
+                        puuid: loader.get_player_info(tokens.1.clone()).unwrap(),
                         port: lockfile.0,
                         password: lockfile.1,
                         region: region_shard.0,

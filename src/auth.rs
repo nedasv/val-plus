@@ -1,4 +1,4 @@
-use crate::loader;
+use log::{error, info};
 
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct Authorization {
@@ -19,23 +19,18 @@ pub fn get_auth(port: String, password: String) -> Result<(String, String), Resp
             Err(_) => return Err(Response::ClientNotBuilt),
     };
 
-    println!("Client was built");
-
     let res = match client.get(format!("https://127.0.0.1:{}/entitlements/v1/token", port)).basic_auth("riot", Some(password)).send() {
         Ok(response) => {
-            println!("{:?}", response);
+            info!("Auth Response: {:?}", response);
             response
         },
         Err(_) => return Err(Response::ValorantNotOpen),
     };
 
-    println!("Got response");
-
-    
     let auth = match res.json::<Authorization>() {
         Ok(auth) => auth,
         Err(err) => {
-            println!("{:?}", err);
+            error!("Auth Error: {:?}", err);
             return Err(Response::SerdeError)
         },
     };

@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use crate::r#match::Error;
 use crate::RiotAuth;
 
 #[derive(Deserialize, Debug)]
@@ -11,13 +10,19 @@ pub struct NameService {
     #[serde(rename = "TagLine")]
     pub tag_line: String,
 }
+
+#[derive(Debug)]
+pub enum NameServiceError {
+    SerdeError, ResponseError, ClientError, ResponseUnsuccessful
+}
+
 impl NameService {
-    pub fn get_names(auth: &RiotAuth, users: Vec<String>) -> Result<Vec<NameService>, Error> {
+    pub fn get_names(auth: &RiotAuth, users: Vec<String>) -> Result<Vec<NameService>, NameServiceError> {
         let client = match reqwest::blocking::Client::builder()
             .danger_accept_invalid_certs(true)
             .build() {
             Ok(client) => client,
-            Err(_) => return Err(Error::ClientError),
+            Err(_) => return Err(NameServiceError::ClientError),
         };
 
         let resp = match client.put(format!("https://pd.{}.a.pvp.net/name-service/v2/players", &auth.shard))
@@ -30,18 +35,17 @@ impl NameService {
             Ok(resp) => resp,
             Err(err) => {
                 println!("{:?}", err);
-                return Err(Error::RiotError)
+                return Err(NameServiceError::ResponseError)
             }
         };
 
         if resp.status().is_success() {
-            return if let Ok(pre_game) = resp.json::<Vec<NameService>>() {
-                Ok(pre_game)
-            } else {
-                Err(Error::NotPreGame)
+            return match resp.json::<Vec<NameService>>() {
+                Ok(name_service) => Ok(name_service),
+                Err(_) => Err(NameServiceError::SerdeError)
             }
         }
 
-        return Err(Error::Unknown)
+        return Err(NameServiceError::ResponseUnsuccessful)
     }
 }
