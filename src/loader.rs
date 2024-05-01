@@ -1,9 +1,4 @@
-use iced::widget::image::Handle;
 
-use crate::auth::Authorization;
-
-#[derive(Debug)]
-pub enum LoaderError { ResponseUnsuccessful, ResponseError, JsonError, AgentNotFound, CreationError(String), Unavailable }
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Agents {
@@ -47,117 +42,6 @@ pub struct Loader {
     pub ranks: Vec<Tier>
 }
 
-impl Loader {
-    pub fn new() -> Result<Self, LoaderError> {
-        let client = reqwest::blocking::Client::new();
-
-        let agents = match Loader::get_agents(&client) {
-            Ok(agents) => agents,
-            Err(err) => return Err(err),
-        };
-
-        let ranks = match Loader::get_ranks(&client) {
-            Ok(ranks) => ranks,
-            Err(err) => return Err(err),
-        };
-
-        Ok(Self {
-            agents,
-            ranks,
-        })
-    }
-
-    pub fn get_agents(client: &reqwest::blocking::Client) -> Result<Vec<Agent>, LoaderError> {
-        let resp = match client.get("https://valorant-api.com/v1/agents")
-            .send() {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        let agents = match resp.json::<Agents>() {
-                            Ok(agents) => agents,
-                            Err(_) => return Err(LoaderError::CreationError(String::from("Agents: Error converting response to json")))
-                        };
-
-                        return Ok(agents.data);
-
-                    } else {
-                        return Err(LoaderError::Unavailable)
-                    }
-                },
-                Err(err) => return Err(LoaderError::CreationError(String::from("Agents: Response was unsuccesful")))
-            };
-    }
-
-    pub fn get_ranks(client: &reqwest::blocking::Client) -> Result<Vec<Tier>, LoaderError> {
-        let resp = match client.get("https://valorant-api.com/v1/competitivetiers")
-            .send() {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        let ranks = match resp.json::<Ranks>() {
-                            Ok(ranks) => ranks.data,
-                            Err(err) => {
-                                println!("{:?}", err);
-                                return Err(LoaderError::CreationError(String::from("Ranks: Error converting response to json")))
-                            }
-                        };
-
-                        // let tiers = match ranks.data.get(4) {
-                        //     Some(tiers) => tiers,
-                        //     None => return Err(LoaderError::JsonError)
-                        // };
-
-                        return Ok(ranks);
-
-                    } else {
-                        return Err(LoaderError::Unavailable)
-                    }
-                },
-                Err(err) => return Err(LoaderError::CreationError(String::from("Ranks: Response was unsuccesful")))
-            };
-    }
-}
-
-impl Rank {
-    pub fn get_image(&self) -> Result<Handle, LoaderError> {
-        let client = reqwest::blocking::Client::new();
-
-        match client.get(&self.small_icon_link.as_ref().unwrap().to_owned()).send() {
-            Ok(resp) => {
-                let bytes = resp.bytes().unwrap();
-                //let image = image::load_from_memory(&bytes).unwrap();
-                //let byte = image.as_bytes().to_owned();
-                let handle = Handle::from_pixels(64, 64, bytes);
-
-                return Ok(handle);
-
-            },
-            Err(_) => return Err(LoaderError::ResponseError),
-        };
-    }
-}
-
-// impl Agent {
-//     pub fn get_image(&self) -> Option<DynamicImage> {
-//         let client = reqwest::blocking::Client::new();
-
-//         let resp = match client.get(&self.display_icon)
-//             .send() {
-//                 Ok(resp) => resp,
-//                 Err(_) => return None,
-//         };
-
-//         let bytes = resp.bytes().unwrap();
-//         let image = image::load_from_memory(&bytes).unwrap();
-//         //let byte = image.as_bytes();
-
-//         //let handle = Handle::from_memory(byte.clone());
-
-//         //let handle = Handle::from_memory(&bytes);
-//         //let image = image::load_from_memory(&bytes).unwrap();
-
-//         return Some(image)
-//     }
-// }
-
 #[derive(Debug, Default)]
 pub struct Lockfile {
     pub port: String,
@@ -189,6 +73,11 @@ pub struct ValClient {
     pub version: String,
 }
 
+#[derive(Debug)]
+pub enum LoaderError {
+    NoLockFile, NoShard, NoVersion, ClientError, NoPlayerInfo
+}
+
 impl Default for User {
     fn default() -> Self {
         Self {
@@ -200,48 +89,34 @@ impl Default for User {
 }
 
 // Reads lockfile data from "C:\Users\User1\AppData\Local\Riot Games\Riot Client\Config" which contains the port and password to access local api
-pub fn get_lockfile() -> Option<Lockfile> {
+pub fn get_lockfile() -> Result<(String, String), LoaderError> {
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
         let lockfile_path = format!{"{}{}", path, "\\Riot Games\\Riot Client\\Config\\lockfile"};
         
         let content = match std::fs::read_to_string(&lockfile_path) {
             Ok(text) => text,
-            Err(_) => return None,
+            Err(_) => return Err(LoaderError::ClientError),
         };
 
         let split_content: Vec<&str> = content.split(":").collect();
-        let mut lockfile = Lockfile::default();
 
         if let Some(port) = split_content.get(2) {
-            lockfile.port = port.to_string();
-        } else {
-            return None;
+            if let Some(password) = split_content.get(3) {
+                return Ok((port.to_string(), password.to_string()))
+            }
         }
-
-        if let Some(password) = split_content.get(3) {
-            lockfile.password = password.to_string();
-        } else {
-            return None;
-        }
-        
-        return Some(lockfile);
     }
-    return None;
+
+    Err(LoaderError::NoLockFile)
 }
 
-pub fn get_region_shard(user: &mut User) -> Option<bool>{
-    println!("REGION");
-
+pub fn get_region_shard() -> Result<(String, String), LoaderError>{
     if let Ok(path) = std::env::var("LOCALAPPDATA") {
         let shooter_game_path = format!("{}{}", path, "\\VALORANT\\Saved\\Logs\\ShooterGame.log");
 
-        println!("{:?}", shooter_game_path);
-
         let content = match std::fs::read_to_string(&shooter_game_path) {
             Ok(text) => text,
-            Err(err) => {
-                println!("{:?}", err);
-                return None},
+            Err(_) => return Err(LoaderError::ClientError),
         };
 
         // Uses an endpoint log used by valorant to extract region and shard of player
@@ -250,80 +125,75 @@ pub fn get_region_shard(user: &mut User) -> Option<bool>{
 
         let link = match split_2.get(0) {
             Some(link) => link,
-            None => return None,
+            None => return Err(LoaderError::NoShard),
         };
 
         let region_re = regex::Regex::new(r"-(\w+)-").unwrap();
         let region = match region_re.captures(&link) {
             Some(region) => region,
-            None => return None,
+            None => return Err(LoaderError::NoShard),
         };
 
         let shard_re = regex::Regex::new(r"1.(\w+).").unwrap();
         let shard = match shard_re.captures(&link) {
             Some(shard) => shard,
-            None => return None,
+            None => return Err(LoaderError::NoShard),
         };
 
         if let Some(region) = region.get(1) {
-            user.region = region.as_str().to_string();
-
             if let Some(shard) = shard.get(1) {
-                user.shard = shard.as_str().to_string();
-            } else {
-                return None;
+                return Ok((region.as_str().to_string(), shard.as_str().to_string()))
             }
-        } else {
-            return None;
         }
-        
-        //println!("{:?} {:?}", region.get(1).unwrap().as_str().to_string(), shard.get(1).unwrap().as_str().to_string());
     }
 
-    return None
+    return Err(LoaderError::ClientError)
 }
 
-pub fn get_client_version(lockfile: &Lockfile, user: &mut User) -> Option<HostApp> {
+pub fn get_client_version(port: String, password: String) -> Result<String, LoaderError> {
     let client = match reqwest::blocking::Client::builder()
         .danger_accept_invalid_certs(true)
         .build() {
             Ok(client) => client,
-            Err(_) => return None,
+            Err(_) => return Err(LoaderError::ClientError),
     };
 
-    let res = match client.get(format!("https://127.0.0.1:{}/product-session/v1/external-sessions", &lockfile.port)).basic_auth("riot", Some(&lockfile.password)).send() {
+    let res = match client.get(format!("https://127.0.0.1:{}/product-session/v1/external-sessions", &port)).basic_auth("riot", Some(&password)).send() {
         Ok(response) => {
             println!("{:?}", response);
             response
         },
         Err(err) => {
             println!("{:?}", err);    
-            return None;
+            return Err(LoaderError::NoVersion);
         },
     };
 
-    return Some(res.json::<HostApp>().unwrap());
+    let map = res.json::<HostApp>().unwrap();
+
+    return Ok(map.host_app.version.clone());
 }
 
-pub fn get_player_info(user: &mut User, auth: &Authorization) {
+pub fn get_player_info(access_token: String) -> Result<String, LoaderError> {
     let client = match reqwest::blocking::Client::builder()
         .danger_accept_invalid_certs(true)
         .build() {
             Ok(client) => client,
-            Err(_) => return,
+            Err(_) => return Err(LoaderError::ClientError),
     };
 
-    let res = match client.get("https://auth.riotgames.com/userinfo").bearer_auth(&auth.access_token).send() {
+    let res = match client.get("https://auth.riotgames.com/userinfo").bearer_auth(&access_token).send() {
         Ok(response) => {
             println!("{:?}", response);
             response
         },
         Err(err) => {
             println!("{:?}", err);    
-            return;
+            return Err(LoaderError::NoPlayerInfo);
         },
     };
 
     let info = res.json::<UserId>().unwrap();
-    user.puuid = info.puuid.clone();
+
+    return Ok(info.puuid.clone());
 }

@@ -1,365 +1,652 @@
-use std::fs::File;
-use std::io::Read;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use agent_select::*;
-use iced::futures::lock;
-use iced::widget::image::Handle;
-use iced::{Element, Settings, Application, Command, Length, Renderer};
-use iced::widget::{Button, button, column, Column, text, Row, container, Container, scrollable, Image, row};
-use loader::{Agents, Agent, Tier};
+use std::collections::HashMap;
+use turbosql::{execute, select, Turbosql};
+use crate::auth::get_auth;
+use crate::loader::{get_client_version, get_lockfile, get_player_info, get_region_shard};
+
+use std::time;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use eframe::egui;
+use eframe::egui::{Color32, Layout, Pos2, Rounding, Vec2};
+use poll_promise::Promise;
+use crate::database::{MatchHistory, NameHistory};
+use crate::r#match::{AgentDetail, MapDetail, MatchDetails};
 
 mod loader;
 mod auth;
-mod party;
-mod agent_select;
-mod presence;
+mod pre_game;
+mod r#match;
+mod name_service;
+mod database;
+mod match_handler;
 
-struct App {
-    state: State,
-    players: Option<Vec<Player>>,
-    agents: Vec<Agent>,
-    ranks: Vec<Tier>,
+#[derive(Debug, Clone)]
+struct LoadedPlayer {
+    uuid: String,
+    name: String,
+    tag: String,
+    team: TeamType,
+
+    match_history: Option<Vec<MatchHistory>>,
+    name_history: Option<Vec<NameHistory>>,
+
+    times_played: i64,
+    last_played: i64,
+
+    agent_id: String,
+    incognito: bool,
+}
+//
+#[derive(Debug, Clone)]
+enum TeamType {
+    Ally,
+    Enemy
+}
+//
+#[derive(Turbosql, Default, Debug, Clone)]
+struct UserDatabase {
+    rowid: Option<i64>,
+    uuid: Option<String>,
+    times_played: Option<i64>,
+    last_played: Option<i64>,
 }
 
-fn id_to_rank(id: u8) -> String {
-    //let ranks: [&str; 10] = ["Iron 1", "Iron 2", "Iron 3", "Bronze"];
-
-
-    return String::from("hello")
-}
-
-enum State { Loading, Party, PreGame, Game }
-
-#[derive(Clone, Copy, Debug)]
-enum Message {
-    Refresh,
-    LoadPreGamePlayers
-}
-
-fn main() -> iced::Result {
-    App::run(Settings {
-        window: iced::window::Settings {
-            size: (1280, 800),
-            resizable:  false,
-            ..Default::default()
-        },
+fn main() -> Result<(), eframe::Error> {
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([350.0, 350.0])
+            .with_resizable(false)
+            .with_maximize_button(false),
         ..Default::default()
-    })
+    };
+    eframe::run_native(
+        "Val+",
+        options,
+        Box::new(|cc| {
+            // This gives us image support:
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Box::<MyApp>::default()
+        }),
+    )
 }
 
-impl Application for App {
-    type Message = Message;
-    type Theme = iced::Theme;
-    type Executor = iced::executor::Default;
-    type Flags = ();
+#[derive(Default)]
+struct MyApp {
+    auth: Option<RiotAuth>,
+    state: State,
 
-    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+    loaded_players: Option<Vec<LoadedPlayer>>,
+    current_match_id: String,
+    settings: Settings,
 
-        let mut loader = loader::Loader::new().unwrap();
+    selected_user: Option<u8>,
 
-        println!("{:?}", loader);
+    promise: Option<Promise<Option<(Vec<LoadedPlayer>, String)>>>,
 
-        //loader.get_agents().unwrap();
-        //let agents = loader.agent_cache.unwrap();
+    map_icon_cache: Option<MapDetail>,
+    agent_icon_cache: Option<AgentDetail>,
 
-        (
-            Self {
-                state: State::Loading,
-                players: None,
-                agents: loader.agents,
-                ranks: loader.ranks,
-            }, Command::none()
-        )
+}
 
-        // if let Ok(_) = loader.get_agents() {
-        //     let agents = loader.agent_cache.unwrap();
-        //     println!("{:?}", loader);
+#[derive(Debug, Clone, PartialEq)]
+enum State {
+    Refresh,
+    ButtonRefresh,
+    WaitValorant,
+    CheckPromise,
+    WaitMatch,
+    Settings,
+}
 
-        //     return (
-        //         Self {
-        //             state: State::Loading, 
-        //             players: None, 
-        //             agents: agents,
-        //          }
-        //         ,Command::none()
-        //     )
-
-        //     //let agents = loader.agent_cache.unwrap().get_agent(uuid)
-
-        //     //println!("{:?}", loader.agent_cache.unwrap().data)
-
-        // } else {
-        //     println!("UNSUCCESSFUL LOADING")
-        // }
-
-        // (
-        //     Self {
-        //         state: State::Loading, 
-        //         players: None, 
-        //         agents: None,
-        //      }
-        //     ,Command::none()
-        // )
+impl Default for State {
+    fn default() -> Self {
+        Self::WaitValorant
     }
+}
 
-    fn title(&self) -> String {
-        String::from("Val+")
-    }
+#[derive(Debug, Clone)]
+struct RiotAuth {
+    access_token: String,
+    client_ver: String,
+    puuid: String,
+    port: String,
+    password: String,
+    region: String,
+    shard: String,
+    token: String,
+}
 
-    fn update(&mut self, message: Message) -> Command<Message> {
-        match message {
-            Message::Refresh => {
-                // let mut user = loader::User::default();
+#[derive(Debug, Clone)]
+pub struct Settings {
+    auto_refresh: bool,
+    wait_time: u64,
+    refresh_time: u64,
+    last_checked: u64,
+}
 
-                // loader::get_region_shard(&mut user);
-                
-
-                // let lockfile = loader::get_lockfile().unwrap();
-                // let auth = auth::get_auth(&lockfile).unwrap();
-
-
-                // loader::get_player_info(&mut user, &auth);
-                
-                // let val_client = loader::get_client_version(&lockfile, &mut user).unwrap();
-
-                // let party = party::get_party_id(&val_client.host_app, &user, &auth).unwrap();
-                // let pre_game = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
-
-                // agent_select::get_pre_game(&auth, &user, &pre_game);
-
-                //println!("{:?}", party::get_party_members(&user, &party, &auth));
-            }
-            Message::LoadPreGamePlayers => {
-                let mut user = loader::User::default();
-                loader::get_region_shard(&mut user);
-
-                let lockfile = loader::get_lockfile().unwrap();
-                let auth = auth::get_auth(&lockfile).unwrap();
-
-                loader::get_player_info(&mut user, &auth);
-
-                let match_id = agent_select::PreGameId::default().get_match_id(&user, &auth).unwrap();
-                let pre_game = agent_select::get_pre_game(&auth, &user, &match_id).unwrap();
-
-                let pres = presence::Presence::new().load(&lockfile);
-
-                self.players = Some(pre_game.ally_team.players);
-                self.state = State::PreGame;
-            }            
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            auto_refresh: true,
+            wait_time: 15,
+            refresh_time: 10,
+            last_checked: 0,
         }
-        Command::none()
+    }
+}
+
+impl Settings {
+
+    pub fn time_now(&self) -> u64 {
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
     }
 
-    fn view(&self) -> Element<Message> {
+    // Checks whether refresh time passed
+    pub fn can_refresh(&mut self) -> bool {
+        let time_now = self.time_now();
 
-        //let mut column: Column<'_, Message, Renderer> = Column::new();
+        if (time_now - self.last_checked) > self.refresh_time {
+            self.last_checked = time_now;
+            return true;
+        }
 
-        match &self.state {
-            State::PreGame => {
-                println!("PREGAME VIEW MATCH");
+        return false
+    }
 
-                let players = self.players.as_ref().unwrap();
+    pub fn can_wait(&mut self) -> bool {
+        let time_now = self.time_now();
+
+        if (time_now - self.last_checked) > self.wait_time {
+            self.last_checked = time_now;
+            return true;
+        }
+
+        return false
+    }
+
+    pub fn get_refresh_time(&mut self) -> u64 {
+        let time_now = self.time_now();
+
+        // .max(0) makes cast into u64 turn into 0 if i64 is negative
+        (self.refresh_time as i64 - (time_now - self.last_checked) as i64).max(0) as u64
+    }
+}
+
+impl RiotAuth {
+    fn load() -> Option<Self> {
+        // TODO: check if lockfile exists, keep checking until it does
+
+        println!("{:?}", database::add_user("abc123".to_string()));
+        println!("{:?}", database::get_user("abc123".to_string()));
+        println!("{:?}", database::update_user("abc123".to_string()));
+        println!("{:?}", database::get_user("abc123".to_string()));
+
+        if let Ok(lockfile) = get_lockfile() {
+            if let Ok(tokens) = get_auth(lockfile.0.clone(), lockfile.1.clone()) {
+                if let Ok(region_shard) = get_region_shard() {
+                    return Some(Self {
+                        access_token: tokens.1.clone(),
+                        client_ver: get_client_version(lockfile.0.clone(), lockfile.1.clone()).unwrap(),
+                        puuid: get_player_info(tokens.1.clone()).unwrap(),
+                        port: lockfile.0,
+                        password: lockfile.1,
+                        region: region_shard.0,
+                        shard: region_shard.1,
+                        token: tokens.0,
+                    })
+                }
+            }
+        }
+
+        return None
+    }
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+
+            // ---- TOP MENU -----
+
+            ui.horizontal(|ui| {
+                if ui.button("Home").clicked() {
+
+                };
+
+                if self.auth.is_none() {
+                    ui.add_enabled(false, egui::Button::new("Refresh"));
+                } else {
+                    if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
+                        self.settings.last_checked = 0;
+                        self.state = State::ButtonRefresh;
+                    };
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
+                    if ui.button("⚙").clicked() {
+                        self.state = State::Settings;
+                    };
+                });
+
+            });
+
+            // Padding
+            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+            // ---- MAIN BODY ----
+
+            match &self.state {
+
+                State::Settings => {
+                    ui.horizontal(|ui| {
+                        ui.label("Auto Refresh: ");
+                        ui.checkbox(&mut self.settings.auto_refresh, "");
+                    });
+                }
+
+                State::WaitValorant => {
+                    if self.settings.can_wait() {
+                        println!("passed");
+
+                        // check for lockfile
+
+                        if let Ok(agent_cache) = r#match::CurrentGamePlayer::get_agent_details() {
+                            self.agent_icon_cache = Some(agent_cache);
+                        }
+
+                        if let Ok(map_cache) = r#match::CurrentGamePlayer::get_map_details() {
+                            self.map_icon_cache = Some(map_cache);
+                        }
+
+                        if let Some(auth) = RiotAuth::load() {
+                            self.auth = Some(auth);
+                            self.state = State::Refresh;
+                        }
+                    } else {
+                        //thread::sleep(Duration::from_secs(self.settings.wait_time));
+                    }
+                }
+
+                State::Refresh | State::ButtonRefresh => {
+                    if (self.settings.can_refresh() && self.settings.auto_refresh) || self.state == State::ButtonRefresh {
+                        self.state = State::Refresh; // In case state was on button refresh
 
 
-                // if let Some(players) = &self.players {
-                    let mut col = Column::new()
-                        .height(Length::Fill)
-                        .width(Length::Fill);
-                    
-                    for player in players {
-                        let agent = self.agents.iter().find(|x| x.uuid.cmp(&player.agent_id).is_eq()).unwrap();
-                        let image_link = agent.display_icon.clone();
+                        match &self.promise {
+                            Some(_) => {
+                                self.state = State::CheckPromise;
+                            }
+                            _ => {
+                                if let Some(auth) = &self.auth {
+                                    // Cloned data to pass into promise
+                                    let new_auth = auth.clone();
+                                    let match_id = self.current_match_id.clone();
 
-                        let client = reqwest::blocking::Client::new();
+                                    self.promise = Some(Promise::spawn_thread("look_for_match", || {
+                                       // TODO: Implement pre-game
 
-                        if let Ok(resp) = client.get(&image_link).send() {
+                                       match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
+                                           Ok(loaded_players) => {
+                                               // (Players, MatchId)
+                                               Some((loaded_players.0, loaded_players.1))
+                                           }
+                                           _ => {
+                                               None
+                                           }
+                                       }
+                                    }));
 
-                            println!("RESP WAS OK");
-
-                            let bytes = resp.bytes().unwrap();
-                            let image = image::load_from_memory(&bytes).unwrap();
-                            let byte = image.as_bytes().to_owned();
-                            let handle = Handle::from_pixels(256, 256, byte);
-
-                            let tiers = self.ranks.get(4).unwrap();
-                            let rank = tiers.tiers.get(player.rank as usize).unwrap();
-
-                            println!("{:?}", rank);
-
-                            col = col.push(row!(Image::new(handle), text(format!("{}", player.rank)), Image::new(rank.get_image().unwrap())))
+                                    self.state = State::CheckPromise;
+                                }
+                            }
                         }
                     }
+                }
 
-                    Container::new(
-                        scrollable(
-                            col
-                        )
-                    )
-                    .height(Length::Fill)
-                    .into()
+                State::CheckPromise => {
+                    if let Some(promise) = &self.promise {
+                        if let Some(promise) = promise.ready() {
+                            match promise {
+                                Some((players, match_id)) => {
+                                    println!("promise returned Some");
+                                    self.loaded_players = Some(players.to_owned());
+                                    self.current_match_id = match_id.to_owned();
+                                    self.promise = None;
+                                }
+                                None => {
+                                    println!("promise returned None");
+                                    // returns none (so not exist?)
+                                    //self.loaded_players = None;
+                                    self.promise = None;
+                                }
+                            }
+
+                            self.state = State::Refresh;
+                        }
+                    }
+                }
+
+                _ => {
+
+                }
             }
-            _ => {
-                button("Refresh").on_press(Message::LoadPreGamePlayers).into()
+
+            if let Some(players) = &self.loaded_players {
+
+                let f = timeago::Formatter::new();
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for (i, player) in players.iter().enumerate() {
+                        //println!("{:?}", player.match_details);
+                        
+                        if player.times_played > 0 {
+
+                            //println!("{:?}", player);
+
+                            //println!("{:?}", ui.input(|i| i.sc));
+
+                            //ui.push_id(i, |ui| {
+                            //egui::ScrollArea::vertical().show(ui, |ui| {
+
+                            //ui.image("https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.seekpng.com%2Fpng%2Fdetail%2F966-9665317_placeholder-image-person-jpg.png&f=1&nofb=1&ipt=35e81c529261e9c3536ba925657b4dbc9f7c8dc97ee19c347059583f9655712a&ipo=images");
+
+                            let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.seekpng.com%2Fpng%2Fdetail%2F966-9665317_placeholder-image-person-jpg.png&f=1&nofb=1&ipt=35e81c529261e9c3536ba925657b4dbc9f7c8dc97ee19c347059583f9655712a&ipo=images".to_string();
+
+                            if let Some(agent_icons) = &self.agent_icon_cache {
+
+                                agent_icon_url = agent_icons.data.iter().find(|x| x.uuid == player.agent_id).unwrap().icon_link.clone();
+                            }
+
+
+                            // ui.vertical_centered(|ui| {
+                            //
+                            //     ui.add(
+                            //         egui::Image::new(agent_icon_url)
+                            //             .max_width(50.0)
+                            //     );
+                            //
+                            //     ui.colored_label(egui::Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
+                            // });
+
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::Image::new(agent_icon_url)
+                                        .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                        .maintain_aspect_ratio(false)
+                                        .rounding(10.0)
+                                );
+
+                                ui.colored_label(egui::Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
+
+
+                                if let Some(history) = &player.match_history {
+                                    let button = ui.button("Show More");
+
+                                    if button.clicked() {
+                                        if let Some(index) = self.selected_user {
+                                            if i == index.to_owned() as usize {
+                                                // USER CLICKED ALREADY SELECTED
+                                                self.selected_user = None;
+                                            }  else {
+                                                self.selected_user = Some(i as u8);
+                                            }
+                                        } else {
+                                            self.selected_user = Some(i as u8);
+                                        }
+                                    }
+                                }
+
+                                //ui.add_space(ui.available_width() - 80.0);
+
+                            });
+
+                            // let mut style: egui::Style = (*ui.ctx().style()).clone();
+                            // style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(200, 200, 200);
+                            // style.visuals.widgets.noninteractive.corner_radius = 10.0;
+                            // ui.ctx().set_style(style);
+
+                            if let Some(index) = self.selected_user {
+                                if i == index.to_owned() as usize {
+
+                                    if let Some(name_history) = &player.name_history {
+                                        if name_history.len() > 0 {
+
+                                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+                                            ui.label("Previous Usernames: ");
+
+                                            for name in name_history {
+                                                ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
+                                            }
+                                        }
+                                    }
+
+                                    //egui::ScrollArea::vertical().show(ui, |ui| {
+                                    if let Some(history) = &player.match_history {
+
+                                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+                                        //println!("hisotyr part");
+                                        for (i, log) in history.iter().rev().enumerate() {
+                                            // if let Some(match_id) = &log.match_id {
+                                            //     println!("label part");
+                                            //
+                                            //     ui.label(match_id.clone());
+                                            // }
+
+                                            // let rect = egui::Rect::from_min_size(Pos2::new(100.0, i as f32 * 105.0 - ui.input(|i| i.raw_scroll_delta.y)), egui::Vec2::new(ui.max_rect().width(), 100.0));
+                                            // let corner_radius = 10.0;
+                                            // ui.painter().rect_filled(rect, corner_radius, Color32::BLACK);
+                                            //
+                                            // // Add a dummy widget of the same size as the painted rectangle
+                                            //
+                                            //
+                                            // ui.allocate_space(egui::Vec2::new(ui.max_rect().width(), 100.0));
+
+                                            // Create a custom widget that takes up space in the layout
+
+                                            let mut map_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
+                                            let mut map_name = "Unknown".to_string();
+                                            let mut enemy = false;
+                                            let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
+
+
+                                            if let Some(map_icons) = &self.map_icon_cache {
+                                                // println!("{:?}", map_icons);
+                                                // println!("{:?}", log.map_id.clone().unwrap());
+                                                //
+                                                // for icon in &map_icons.data {
+                                                //     println!("{:?}", icon.path);
+                                                // }
+                                                let map = map_icons.data.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
+
+                                                if let Some(agent_icons) = &self.agent_icon_cache {
+                                                    agent_icon_url = agent_icons.data.iter().find(|x| x.uuid == log.agent_id.clone().unwrap()).unwrap().icon_link.clone();
+                                                }
+
+                                                map_icon_url = map.icon_link.clone();
+                                                map_name = map.name.clone();
+                                                if log.enemy.clone().unwrap() {
+                                                    enemy = true;
+                                                }
+                                            }
+
+                                            egui::Frame::none()
+                                                .fill(Color32::from_rgb(31, 31, 31))
+                                                .rounding(10.0)
+                                                .show(ui, |ui| {
+                                                    ui.set_width(ui.available_width());
+                                                    ui.set_height(80.0);
+                                                    ui.set_max_height(80.0);
+
+                                                    ui.horizontal(|ui| {
+                                                        ui.add(
+                                                            egui::Image::new(agent_icon_url)
+                                                                .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                                .maintain_aspect_ratio(false)
+                                                                .rounding(10.0)
+                                                        );
+
+                                                        ui.vertical(|ui| {
+
+                                                            ui.add_space(15.0);
+
+                                                            ui.colored_label(Color32::WHITE, map_name);
+
+                                                            if enemy {
+                                                                ui.colored_label(Color32::RED, "Enemy");
+                                                            } else {
+                                                                ui.colored_label(Color32::GREEN, "Team");
+                                                            }
+
+
+                                                            ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+                                                        });
+
+                                                        ui.add_space(ui.available_width() - 80.0);
+
+                                                        ui.add(
+                                                            egui::Image::new(map_icon_url)
+                                                                .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                                .maintain_aspect_ratio(false)
+                                                                .rounding(10.0)
+                                                        );
+                                                    });
+
+
+                                                    // ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    //
+                                                    //     ui.add(
+                                                    //         egui::Image::new(map_icon_url)
+                                                    //             .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                    //             .maintain_aspect_ratio(false)
+                                                    //             .rounding(10.0)
+                                                    //     );
+                                                    //
+                                                    //
+                                                    //
+                                                    //     // //ui.vertical(|ui| {
+                                                    //     //     //ui.add_space(25.0);
+                                                    //     //
+                                                    //     //     ui.horizontal(|ui| {
+                                                    //     //         ui.colored_label(Color32::WHITE, map_name);
+                                                    //     //         ui.colored_label(Color32::WHITE, enemy);
+                                                    //     //     });
+                                                    //     //
+                                                    //     //     ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+                                                    //     // //});
+                                                    //     //
+                                                    //     // ui.add(
+                                                    //     //     egui::Image::new(agent_icon_url)
+                                                    //     //         .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                    //     //         .maintain_aspect_ratio(false)
+                                                    //     //         .rounding(10.0)
+                                                    //     // );
+                                                    //
+                                                    //
+                                                    // });
+                                                    //
+                                                    // ui.with_layout(Layout::left_to_right(egui::Align::Center), |ui| {
+                                                    //
+                                                    //     ui.add(
+                                                    //         egui::Image::new(agent_icon_url)
+                                                    //             .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                    //             .maintain_aspect_ratio(false)
+                                                    //             .rounding(10.0)
+                                                    //     );
+                                                    //
+                                                    //
+                                                    //
+                                                    //     // //ui.vertical(|ui| {
+                                                    //     //     //ui.add_space(25.0);
+                                                    //     //
+                                                    //     //     ui.horizontal(|ui| {
+                                                    //     //         ui.colored_label(Color32::WHITE, map_name);
+                                                    //     //         ui.colored_label(Color32::WHITE, enemy);
+                                                    //     //     });
+                                                    //     //
+                                                    //     //     ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+                                                    //     // //});
+                                                    //     //
+                                                    //     // ui.add(
+                                                    //     //     egui::Image::new(agent_icon_url)
+                                                    //     //         .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                    //     //         .maintain_aspect_ratio(false)
+                                                    //     //         .rounding(10.0)
+                                                    //     // );
+                                                    //
+                                                    //
+                                                    // });
+
+
+                                                    // ui.vertical_centered_justified(|ui| {
+                                                    //
+                                                    //     //ui.add_space(25.0);
+                                                    //
+                                                    //
+                                                    //
+                                                    //     ui.colored_label(Color32::WHITE,"(2391 days ago)");
+                                                    // });
+                                                });
+
+                                            //ui.add_space(5.0);
+
+
+                                            // egui::Frame::dark_canvas(ui.style()).corner_radius(10.0).show(ui, |ui| {
+                                            //     ui.label(format!("Played: {}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+                                            // });
+
+
+                                            // ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                                            // //ui.label(log.match_id.as_ref().unwrap().clone());
+                                            // ui.label(format!("Played: {}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+
+
+                                        }
+                                    } else {
+                                        ui.label("No history");
+                                    }
+                                    //});
+
+
+                                }
+                            }
+
+                            // ui.vertical_centered(|ui| {
+                            //     if let Some(history) = &player.match_history {
+                            //         let button = ui.button(format!("Show History ({})", history.len()));
+                            //
+                            //         if button.clicked() {
+                            //             if let Some(index) = self.selected_user {
+                            //                 if i == index.to_owned() as usize {
+                            //                     // USER CLICKED ALREADY SELECTED
+                            //                     self.selected_user = None;
+                            //                 }  else {
+                            //                     self.selected_user = Some(i as u8);
+                            //                 }
+                            //             } else {
+                            //                 self.selected_user = Some(i as u8);
+                            //             }
+                            //         }
+                            //     }
+                            // });
+
+                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                            //});
+                            //});
+
+                            ui.label("Made by: nedasv | Discord: 3eu");
+
+
+                        }
+                    }
+                });
+
+                // render players
+
             }
-        }
-
-        // let mut content = Column::new();
-
-        // for _i in 0..5 {
-        //     content = content.push(button("hl"))
-        // }
-
-        // content.into()
-        
-        
-        
+        });
     }
 }
-
-// #[derive(Debug, Default)]
-// struct Lockfile {
-//     port: String,
-//     password: String,
-// }
-
-// #[derive(Default, serde::Deserialize)]
-// struct Entiltement {
-//     #[serde(rename = "accessToken")]
-//     access_token: String,
-//     token: String,
-// }
-
-// #[derive(serde::Deserialize, Debug, Default)]
-// struct User {
-//     #[serde(rename = "sub")]
-//     uuid: String,
-// }
-
-// #[derive(serde::Deserialize, Debug)]
-// struct GamePlayer {
-//     #[serde(rename = "MatchID")]
-//     match_id: String,
-// }
-
-// #[derive(serde::Deserialize, Debug)]
-// struct CurrentMatch {
-//     #[serde(rename = "MapID")]
-//     map_id: String,
-//     #[serde(rename = "ModeID")]
-//     mode_id: String,
-//     #[serde(rename = "ProvisioningFlow")]
-//     game_type: String,
-//     #[serde(rename = "Players")]
-//     players: Vec<CurrentMatchPlayer>,
-// }
-
-// #[derive(serde::Deserialize, Debug)]
-// struct CurrentMatchPlayer {
-//     #[serde(rename = "TeamID")]
-//     team_id: String,
-//     #[serde(rename = "CharacterID")]
-//     character_id: String,
-//     #[serde(rename = "PlayerIdentity")]
-//     player_identity: PlayerIdentity,
-//     #[serde(rename = "SeasonalBadgeInfo")]
-//     player_act_info: PlayerActInfo,
-
-// }
-
-// #[derive(serde::Deserialize, Debug)]
-// struct PlayerIdentity {
-//     #[serde(rename = "Subject")]
-//     uuid: String,
-//     #[serde(rename = "PlayerCardID")]
-//     card_id: String,
-//     #[serde(rename = "PlayerTitleID")]
-//     title_id: String,
-//     #[serde(rename = "AccountLevel")]
-//     account_level: u16,
-//     #[serde(rename = "Incognito")]
-//     incognito: bool,
-//     #[serde(rename = "HideAccountLevel")]
-//     hide_account_level: bool,
-// }
-
-// #[derive(serde::Deserialize, Debug)]
-// struct PlayerActInfo {
-//     #[serde(rename = "NumberOfWins")]
-//     wins: u16,
-//     #[serde(rename = "Rank")]
-//     rank: u8,
-//     #[serde(rename = "LeaderboardRank")]
-//     leaderboard_rank: u16,
-// }
-
-// #[tokio::main]
-// async fn main() {
-
-//     let mut lockfile = Lockfile::default();
-//     let mut user = User::default();
-
-//     //let lockfile = std::env::var("LOCALAPPDATA");
-
-//     if let Ok(path) = std::env::var("LOCALAPPDATA") {
-//         let lockfile_path = format!{"{}{}", path, "\\Riot Games\\Riot Client\\Config\\lockfile"};
-
-//         let content = match std::fs::read_to_string(&lockfile_path) {
-//             Ok(text) => text,
-//             Err(_) => return,
-//         };
-
-//         let split_content: Vec<&str> = content.split(":").collect();
-
-//         lockfile.port = split_content.get(2).unwrap().to_string();
-//         lockfile.password = split_content.get(3).unwrap().to_string();
-//     }
-
-//     //println!("{:?}", lockfile);
-
-//     let client = reqwest::Client::builder()
-//         .danger_accept_invalid_certs(true) // Local ip does not have ssl certificate
-//         .build()
-//         .unwrap();
-
-//     let result =  match client.get(format!("https://127.0.0.1:{}/entitlements/v1/token", lockfile.port))
-//         .basic_auth("riot", Some(lockfile.password))
-//         .send()
-//         .await {
-//             Ok(resp) => {
-//                 //let mut text = String::new();
-
-//                 if let Ok(content) = resp.json::<Entiltement>().await {
-//                     content
-//                     //text = content;
-//                 } else {
-//                     return;
-//                 }
-
-//                 //text
-//             },
-//             Err(_) => return,
-//     };
-
-//     let player_info_res = client.get("https://auth.riotgames.com/userinfo")
-//         .bearer_auth(&result.access_token)
-//         .send()
-//         .await;
-
-//     let user_puuid = player_info_res.unwrap().json::<User>().await.unwrap();
-
-//     let player_match = client.get(format!("https://glz-eu-1.eu.a.pvp.net/core-game/v1/players/{}", user_puuid.uuid))
-//         .bearer_auth(&result.access_token)
-//         .header("X-Riot-Entitlements-JWT", &result.token)
-//         .send()
-//         .await;
-
-//     let game_player = player_match.unwrap().json::<GamePlayer>().await.unwrap();
-
-//     let match_data = client.get(format!("https://glz-eu-1.eu.a.pvp.net/core-game/v1/matches/{}", game_player.match_id))
-//         .bearer_auth(&result.access_token)
-//         .header("X-Riot-Entitlements-JWT", &result.token)
-//         .send()
-//         .await;
-
-//     println!("{:?}", match_data.unwrap().json::<CurrentMatch>().await.unwrap());
-// }

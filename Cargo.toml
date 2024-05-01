@@ -6,9 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.12.3", features = ["json", "blocking"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
-iced = { version = "0.10.0", features = ["image", "advanced"] }
 regex = { version = "1.9.5" }
-image = { version = "0.24.7" }
+image = { version = "0.25.1", features = ["jpeg", "png"] }
+serde_json = {  version = "1.0.107" }
+turbosql = { version = "0.10.0" }
+eframe = {  version = "0.27.2", features = ["default"] }
+env_logger = { version = "0.10", default-features = false, features = [
+    "auto-color",
+    "humantime",
+]}
+
+ehttp = "0.5.0"
+egui_extras = { version = "0.27", features = ["all_loaders", "http", "image", "file", "svg"] }
+
+poll-promise = "0.3.0"
+timeago = "0.4.2"
