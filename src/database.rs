@@ -30,15 +30,15 @@ pub struct NameHistory {
     pub name_time: Option<i64>
 }
 
-pub fn user_exits(uuid: String) -> bool {
+fn user_exits(uuid: &String) -> bool {
     if select!(UserDatabase "WHERE uuid =" uuid).is_ok() {
         return true
     }
     return false
 }
-pub fn add_user(uuid: String) -> Result<(), ()> {
+fn add_user(uuid: &String) -> Result<(), ()> {
     let res = UserDatabase {
-        uuid: Some(uuid),
+        uuid: Some(uuid.clone()),
         times_played: Some(0),
         ..Default::default()
     }.insert();
@@ -58,6 +58,13 @@ pub fn get_user(uuid: String) -> Result<UserDatabase, ()> {
 }
 
 pub fn update_user(uuid: String) -> Result<(), ()> {
+
+    if !user_exits(&uuid) {
+        if let Err(_) = add_user(&uuid) {
+            return Err(())
+        }
+    }
+
     if let Ok(a) = execute!("UPDATE userdatabase SET times_played = times_played + 1, last_played =" SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() "WHERE uuid=" uuid) {
         return Ok(())
     }

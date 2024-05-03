@@ -7,13 +7,6 @@ pub struct Lockfile {
     pub password: String,
 }
 
-#[derive(Debug)]
-pub struct User {
-    pub region: String,
-    pub shard: String,
-    pub puuid: String,
-}
-
 #[derive(serde::Deserialize)]
 pub struct UserId {
     #[serde(rename = "sub")]
@@ -71,7 +64,8 @@ impl Loader {
                         let re = Regex::new(r"https://glz-(.+?)-1.(.+?).a.pvp.net").unwrap();
 
                         if let Some(capture) = re.captures(&shooter_game) {
-                            if let (Some(region), Some(shard)) = (capture.get(1), capture.get(2)) {
+                            if let (Some(region), Some(shard)) =
+                                (capture.get(1), capture.get(2)) {
                                 return Some((region.as_str().to_string(), shard.as_str().to_string()))
                             }
                         }
