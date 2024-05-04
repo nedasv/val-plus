@@ -383,7 +383,7 @@ impl eframe::App for MyApp {
                                     );
                                 }
 
-                                ui.colored_label(Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
+                                ui.colored_label(Color32::WHITE,  format!("{}#{} ({})", if !player.incognito { player.name.clone() } else { "N/A".to_string() }, if !player.incognito { player.tag.clone() } else { "N/A".to_string() }, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
 
                                 if player.match_history.len() > 0usize {
                                     let button = ui.button("Show More");
