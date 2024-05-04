@@ -252,7 +252,7 @@ impl CurrentGamePlayer {
             if let Ok(current_match) = CurrentGamePlayer::get_match(&auth, match_id.clone()) {
                 let player_ids: Vec<String> = current_match.players.iter().map(|player| player.player_identity.uuid.clone()).collect();
 
-                if let Ok(player_names) = name_service::NameService::get_names(&auth, player_ids) {
+                if let Some(player_names) = name_service::NameService::get_names(&auth, player_ids) {
                     let mut players = Vec::new();
                     let player_team = current_match.players.iter().find(|x| x.player_identity.uuid == auth.puuid).unwrap().team_id.clone();
 
