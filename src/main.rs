@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use turbosql::{execute, select, Turbosql};
 use crate::auth::get_auth;
 //use crate::loader::{get_client_version, get_lockfile, get_player_info, get_region_shard};
@@ -79,7 +80,7 @@ fn main() -> Result<(), eframe::Error> {
 
 #[derive(Default)]
 struct MyApp {
-    auth: Option<RiotAuth>,
+    auth: Option<Arc<RiotAuth>>,
     state: State,
 
     loaded_players: Option<Vec<LoadedPlayer>>,
@@ -182,24 +183,21 @@ impl Settings {
 
 impl RiotAuth {
     fn load() -> Option<Self> {
-        // TODO: check if lockfile exists, keep checking until it does
-
         let loader = Loader::new();
 
-        if let Some(lockfile) = loader.get_port_and_password() {
-            println!("{:?}", lockfile);
-            if let Some((token, access_token)) = get_auth(lockfile.0.clone(), lockfile.1.clone()) {
+        if let Some((port, password)) = loader.get_port_and_password() {
+            if let Some((token, access_token)) = get_auth(port.clone(), password.clone()) {
                 println!("here2");
-                if let Some(region_shard) = loader.get_region_and_shard() {
+                if let Some((region, shard)) = loader.get_region_and_shard() {
                     println!("here3");
                     return Some(Self {
                         access_token: access_token.clone(),
-                        client_ver: loader.get_client_version(lockfile.0.clone(), lockfile.1.clone()).unwrap(),
+                        client_ver: loader.get_client_version(port.clone(), password.clone()).unwrap(),
                         puuid: loader.get_player_info(access_token.clone()).unwrap(),
-                        port: lockfile.0,
-                        password: lockfile.1,
-                        region: region_shard.0,
-                        shard: region_shard.1,
+                        port,
+                        password,
+                        region,
+                        shard,
                         token: token.clone(),
                     })
                 }
@@ -218,7 +216,7 @@ impl eframe::App for MyApp {
 
             ui.horizontal(|ui| {
                 if ui.button("Home").clicked() {
-
+                    self.state = State::Refresh;
                 };
 
                 if self.auth.is_none() {
@@ -273,7 +271,7 @@ impl eframe::App for MyApp {
                         // check for lockfile
 
                         if let Some(auth) = RiotAuth::load() {
-                            self.auth = Some(auth);
+                            self.auth = Some(Arc::new(auth));
                             self.state = State::Load;
                         }
                     } else {
@@ -293,7 +291,7 @@ impl eframe::App for MyApp {
                             _ => {
                                 if let Some(auth) = &self.auth {
                                     // Cloned data to pass into promise
-                                    let new_auth = auth.clone();
+                                    let new_auth = Arc::clone(auth);
                                     let match_id = self.current_match_id.clone();
 
                                     self.promise = Some(Promise::spawn_thread("look_for_match", || {

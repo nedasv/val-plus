@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{RiotAuth, LoadedPlayer, name_service, TeamType};
 use crate::database;
@@ -238,7 +239,7 @@ impl CurrentGamePlayer {
         return Err(Error::Unknown)
     }
 
-    pub fn get_players(auth: RiotAuth, prev_match_id: String) -> Result<(Vec<LoadedPlayer>, String), Error> {
+    pub fn get_players(auth: Arc<RiotAuth>, prev_match_id: String) -> Result<(Vec<LoadedPlayer>, String), Error> {
         let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
         if let Ok(match_id) = CurrentGamePlayer::get_match_id(&auth) {
