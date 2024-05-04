@@ -261,18 +261,18 @@ impl CurrentGamePlayer {
 
                         let mut times_played: i64 = 0;
                         let mut last_played: i64 = time_now;
-                        let mut match_history: Option<Vec<MatchHistory>> = None;
-                        let mut name_history: Option<Vec<NameHistory>> = None;
+                        let mut match_history: Vec<MatchHistory> = Vec::new();
+                        let mut name_history: Vec<NameHistory> = Vec::new();
                         //let mut match_details: Vec<MatchDetails> = Vec::new();
 
                         if let Ok(name_his) = database::get_user_name_history(name.uuid.clone()) {
-                            name_history = Some(name_his);
+                            name_history = name_his;
                         } else {
                             println!("Couldnt get name history")
                         }
 
                         if let Ok(match_his) = database::get_user_match_history(name.uuid.clone()) {
-                            match_history = Some(match_his);
+                            match_history = match_his;
                         } else {
                             println!("Couldnt get match history")
                         }

@@ -34,8 +34,8 @@ struct LoadedPlayer {
     tag: String,
     team: TeamType,
 
-    match_history: Option<Vec<MatchHistory>>,
-    name_history: Option<Vec<NameHistory>>,
+    match_history: Vec<MatchHistory>,
+    name_history: Vec<NameHistory>,
 
     times_played: i64,
     last_played: i64,
@@ -298,9 +298,9 @@ impl eframe::App for MyApp {
                                        // TODO: Implement pre-game
 
                                        match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
-                                           Ok(loaded_players) => {
+                                           Ok((loaded_players, match_id)) => {
                                                // (Players, MatchId)
-                                               Some((loaded_players.0, loaded_players.1))
+                                               Some((loaded_players, match_id))
                                            }
                                            _ => {
                                                None
@@ -370,32 +370,22 @@ impl eframe::App for MyApp {
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (i, player) in players.iter().enumerate() {
-                        
                         if player.times_played > 0 {
 
-
-                            let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.seekpng.com%2Fpng%2Fdetail%2F966-9665317_placeholder-image-person-jpg.png&f=1&nofb=1&ipt=35e81c529261e9c3536ba925657b4dbc9f7c8dc97ee19c347059583f9655712a&ipo=images".to_string();
-
-                            if let Some(agent_icons) = &self.agent_icon_cache {
-
-                                agent_icon_url = agent_icons.data.iter().find(|x| x.uuid == player.agent_id).unwrap().icon_link.clone();
-                            }
-
-
-
-
                             ui.horizontal(|ui| {
-                                ui.add(
-                                    egui::Image::new(agent_icon_url)
-                                        .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                        .maintain_aspect_ratio(false)
-                                        .rounding(10.0)
-                                );
 
-                                ui.colored_label(egui::Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
+                                if let Some(agent_icons) = &self.agent_icon_cache {
+                                    ui.add(
+                                        egui::Image::new(agent_icons.data.iter().find(|x| x.uuid == player.agent_id).unwrap().icon_link.clone())
+                                            .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                            .maintain_aspect_ratio(false)
+                                            .rounding(10.0)
+                                    );
+                                }
 
+                                ui.colored_label(Color32::WHITE,  format!("{}#{} ({})", player.name, player.tag, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
 
-                                if let Some(history) = &player.match_history {
+                                if player.match_history.len() > 0usize {
                                     let button = ui.button("Show More");
 
                                     if button.clicked() {
@@ -411,43 +401,31 @@ impl eframe::App for MyApp {
                                         }
                                     }
                                 }
-
-
-
                             });
-
-
 
                             if let Some(index) = self.selected_user {
                                 if i == index.to_owned() as usize {
 
-                                    if let Some(name_history) = &player.name_history {
-                                        if name_history.len() > 0 {
+                                    if &player.name_history.len() > &0usize {
+                                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                                        ui.label("Previous Usernames: ");
 
-                                            ui.label("Previous Usernames: ");
-
-                                            for name in name_history {
-                                                ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
-                                            }
+                                        for name in &player.name_history {
+                                            ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
                                         }
                                     }
 
-
-                                    if let Some(history) = &player.match_history {
+                                    if &player.match_history.len() > &0usize {
 
                                         ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-
-                                        for (i, log) in history.iter().rev().enumerate() {
-
+                                        for log in player.match_history.iter().rev().take(5) {
 
                                             let mut map_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
                                             let mut map_name = "Unknown".to_string();
                                             let mut enemy = false;
                                             let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
-
 
                                             if let Some(map_icons) = &self.map_icon_cache {
                                                 let map = map_icons.data.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
@@ -492,7 +470,7 @@ impl eframe::App for MyApp {
                                                             }
 
 
-                                                            ui.colored_label(Color32::WHITE, format!("{}", f.convert(std::time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
+                                                            ui.colored_label(Color32::WHITE, format!("{}", f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
                                                         });
 
                                                         ui.add_space(ui.available_width() - 80.0);

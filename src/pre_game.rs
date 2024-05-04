@@ -120,8 +120,8 @@ impl PreGame {
                             tag: name.tag_line,
                             team: TeamType::Ally,
 
-                            match_history: None,
-                            name_history: None,
+                            match_history: Vec::new(),
+                            name_history: Vec::new(),
 
                             last_played: 0_i64,
                             times_played: 0_i64,
