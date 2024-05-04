@@ -289,20 +289,6 @@ impl CurrentGamePlayer {
                             println!("Unable to update user")
                         }
 
-                        // if !database::user_exits(name.uuid.clone()) {
-                        //     if let Ok(_) = database::add_user(name.uuid.clone()) {
-                        //         println!("Added new user successfully")
-                        //     } else {
-                        //         println!("Failed to add new user")
-                        //     }
-                        // } else {
-                        //     if let Ok(_) = database::update_user(name.uuid.clone()) {
-                        //         println!("Updated new successfully")
-                        //     } else {
-                        //         println!("Failed to update user")
-                        //     }
-                        // }
-
                         if !database::name_exists(name.uuid.clone(), name.game_name.clone(), name.tag_line.clone()) {
                             if let Ok(_) = database::add_new_name(name.uuid.clone(), name.game_name.clone(), name.tag_line.clone()) {
                                 println!("Added new name successfully")

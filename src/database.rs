@@ -58,7 +58,6 @@ pub fn get_user(uuid: String) -> Result<UserDatabase, ()> {
 }
 
 pub fn update_user(uuid: String) -> Result<(), ()> {
-
     if !user_exits(&uuid) {
         if let Err(_) = add_user(&uuid) {
             return Err(())

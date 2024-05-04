@@ -188,19 +188,19 @@ impl RiotAuth {
 
         if let Some(lockfile) = loader.get_port_and_password() {
             println!("{:?}", lockfile);
-            if let Ok(tokens) = get_auth(lockfile.0.clone(), lockfile.1.clone()) {
+            if let Some((token, access_token)) = get_auth(lockfile.0.clone(), lockfile.1.clone()) {
                 println!("here2");
                 if let Some(region_shard) = loader.get_region_and_shard() {
                     println!("here3");
                     return Some(Self {
-                        access_token: tokens.1.clone(),
+                        access_token: access_token.clone(),
                         client_ver: loader.get_client_version(lockfile.0.clone(), lockfile.1.clone()).unwrap(),
-                        puuid: loader.get_player_info(tokens.1.clone()).unwrap(),
+                        puuid: loader.get_player_info(access_token.clone()).unwrap(),
                         port: lockfile.0,
                         password: lockfile.1,
                         region: region_shard.0,
                         shard: region_shard.1,
-                        token: tokens.0,
+                        token: token.clone(),
                     })
                 }
             }
