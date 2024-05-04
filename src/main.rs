@@ -13,7 +13,7 @@ use eframe::egui;
 use eframe::egui::{Color32, Layout, Pos2, Rounding, Vec2};
 use poll_promise::Promise;
 use crate::database::{MatchHistory, NameHistory};
-use crate::r#match::{AgentDetail, MapDetail, MatchDetails};
+use crate::r#match::{AgentDetail, MapDetail};
 
 mod loader;
 mod auth;

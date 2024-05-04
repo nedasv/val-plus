@@ -82,21 +82,24 @@ pub fn get_user_name_history(uuid: String) -> Result<Vec<NameHistory>, ()>{
 }
 
 pub fn add_new_name(uuid: String, name: String, tag: String) -> Result<(), ()> {
-    let res = NameHistory {
-        uuid: Some(uuid),
-        name: Some(name),
-        tag: Some(tag),
-        name_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        ..Default::default()
-    }.insert();
+    if !name_exists(&uuid, &name, &tag) {
+        let res = NameHistory {
+            uuid: Some(uuid),
+            name: Some(name),
+            tag: Some(tag),
+            name_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+            ..Default::default()
+        }.insert();
 
-    if res.is_ok() {
-        return Ok(())
+        if res.is_ok() {
+            return Ok(())
+        }
     }
+
     Err(())
 }
 
-pub fn name_exists(uuid: String, name: String, tag: String) -> bool {
+fn name_exists(uuid: &String, name: &String, tag: &String) -> bool {
     if select!(NameHistory "WHERE uuid=" uuid "AND name=" name "AND tag=" tag).is_ok() {
         return true
     }
@@ -115,24 +118,27 @@ pub fn get_user_match_history(uuid: String) -> Result<Vec<MatchHistory>, ()>{
 }
 
 pub fn add_new_match(uuid: String, match_id: String, map_id: String, gamemode_id: String, agent_id: String, enemy: bool) -> Result<(), ()> {
-    let res = MatchHistory {
-        uuid: Some(uuid),
-        match_id: Some(match_id),
-        match_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        map_id: Some(map_id),
-        gamemode_id: Some(gamemode_id),
-        agent_id: Some(agent_id),
-        enemy: Some(enemy),
-        ..Default::default()
-    }.insert();
+    if !match_exists(&uuid, &match_id) {
+        let res = MatchHistory {
+            uuid: Some(uuid),
+            match_id: Some(match_id),
+            match_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+            map_id: Some(map_id),
+            gamemode_id: Some(gamemode_id),
+            agent_id: Some(agent_id),
+            enemy: Some(enemy),
+            ..Default::default()
+        }.insert();
 
-    if res.is_ok() {
-        return Ok(())
+        if res.is_ok() {
+            return Ok(())
+        }
     }
+
     Err(())
 }
 
-pub fn match_exists(uuid: String, match_id: String) -> bool {
+fn match_exists(uuid: &String, match_id: &String) -> bool {
     if select!(MatchHistory "WHERE uuid=" uuid "AND match_id=" match_id).is_ok() {
         return true
     }

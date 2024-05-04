@@ -1,4 +1,4 @@
-use crate::{LoadedPlayer, name_service, pre_game, RiotAuth, TeamType};
+use crate::{LoadedPlayer, name_service, RiotAuth, TeamType};
 
 #[derive(serde::Deserialize, Debug, Default)]
 pub struct PreGameId {
@@ -101,13 +101,13 @@ impl PreGame {
     }
 
     pub fn get_players(auth: &RiotAuth, prev_match_id: String) -> Result<Vec<LoadedPlayer>, Error> {
-        if let Ok(match_id) = self::PreGame::get_match_id(auth) {
+        if let Ok(match_id) = PreGame::get_match_id(auth) {
 
             if prev_match_id == match_id {
                 return Err(Error::NotPreGame)
             }
 
-            if let Ok(pre_game) = self::PreGame::get_pre_game(auth, match_id) {
+            if let Ok(pre_game) = PreGame::get_pre_game(auth, match_id) {
                 let player_ids: Vec<String> = pre_game.ally_team.players.iter().map(|player| player.uuid.clone()).collect();
 
                 if let Some(player_names) = name_service::NameService::get_names(auth, player_ids) {
