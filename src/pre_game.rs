@@ -110,7 +110,7 @@ impl PreGame {
             if let Ok(pre_game) = self::PreGame::get_pre_game(auth, match_id) {
                 let player_ids: Vec<String> = pre_game.ally_team.players.iter().map(|player| player.uuid.clone()).collect();
 
-                if let Ok(player_names) = name_service::NameService::get_names(auth, player_ids) {
+                if let Some(player_names) = name_service::NameService::get_names(auth, player_ids) {
                     let mut players = Vec::new();
 
                     for name in player_names {
