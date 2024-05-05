@@ -13,7 +13,7 @@ use eframe::egui;
 use eframe::egui::{Color32, Layout, Pos2, Rounding, Vec2};
 use poll_promise::Promise;
 use crate::database::{MatchHistory, NameHistory};
-use crate::r#match::{AgentDetail, MapDetail};
+use crate::images::ImageData;
 
 mod loader;
 mod auth;
@@ -21,6 +21,7 @@ mod pre_game;
 mod r#match;
 mod name_service;
 mod database;
+mod images;
 
 pub enum ApplicationError {
     RetryError(String),
@@ -90,10 +91,9 @@ struct MyApp {
     selected_user: Option<u8>,
 
     promise: Option<Promise<Option<(Vec<LoadedPlayer>, String)>>>,
-    image_promise: Option<Promise<Option<(MapDetail, AgentDetail)>>>,
+    image_promise: Option<Promise<Option<ImageData>>>,
 
-    map_icon_cache: Option<MapDetail>,
-    agent_icon_cache: Option<AgentDetail>,
+    images: Option<ImageData>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -245,9 +245,11 @@ impl eframe::App for MyApp {
 
                 State::Load => {
                     self.image_promise = Some(Promise::spawn_thread("load_images", || {
-                        if let Ok(agent_cache) = r#match::CurrentGamePlayer::get_agent_details() {
-                            if let Ok(map_cache) = r#match::CurrentGamePlayer::get_map_details() {
-                               return Some((map_cache, agent_cache))
+                        let mut image_data = ImageData::new();
+
+                        if let Ok(_) = image_data.get_agents() {
+                            if let Ok(_) = image_data.get_maps() {
+                                return Some(image_data)
                             }
                         }
 
@@ -340,9 +342,8 @@ impl eframe::App for MyApp {
                     if let Some(promise) = &self.image_promise {
                         if let Some(promise) = promise.ready() {
                             match promise {
-                                Some((maps, agents)) => {
-                                    self.map_icon_cache = Some(maps.clone());
-                                    self.agent_icon_cache = Some(agents.clone());
+                                Some(image_data) => {
+                                   self.images = Some(image_data.to_owned());
                                 }
                                 None => {
                                     println!("promise returned None");
@@ -374,9 +375,9 @@ impl eframe::App for MyApp {
 
                             ui.horizontal(|ui| {
 
-                                if let Some(agent_icons) = &self.agent_icon_cache {
+                                if let Some(image_data) = &self.images {
                                     ui.add(
-                                        egui::Image::new(agent_icons.data.iter().find(|x| x.uuid == player.agent_id).unwrap().icon_link.clone())
+                                        egui::Image::new(image_data.agents.iter().find(|x| x.uuid == player.agent_id).unwrap().icon.clone())
                                             .fit_to_exact_size(Vec2::new(80.0, 80.0))
                                             .maintain_aspect_ratio(false)
                                             .rounding(10.0)
@@ -427,14 +428,12 @@ impl eframe::App for MyApp {
                                             let mut enemy = false;
                                             let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
 
-                                            if let Some(map_icons) = &self.map_icon_cache {
-                                                let map = map_icons.data.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
+                                            if let Some(image_data) = &self.images {
+                                                let map = image_data.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
 
-                                                if let Some(agent_icons) = &self.agent_icon_cache {
-                                                    agent_icon_url = agent_icons.data.iter().find(|x| x.uuid == log.agent_id.clone().unwrap()).unwrap().icon_link.clone();
-                                                }
+                                                agent_icon_url = image_data.agents.iter().find(|x| x.uuid == log.agent_id.clone().unwrap()).unwrap().icon.clone();
 
-                                                map_icon_url = map.icon_link.clone();
+                                                map_icon_url = map.icon.clone();
                                                 map_name = map.name.clone();
                                                 if log.enemy.clone().unwrap() {
                                                     enemy = true;

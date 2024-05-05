@@ -9,38 +9,6 @@ pub struct MatchHandler {
     pub match_id: String,
 }
 
-#[derive(serde::Deserialize, Debug, Default, Clone)]
-pub struct AgentDetail {
-   pub data: Vec<AgentDetailData>,
-}
-
-#[derive(serde::Deserialize, Debug, Default, Clone)]
-pub struct AgentDetailData {
-    #[serde(rename = "uuid")]
-    pub uuid: String,
-    #[serde(rename = "displayName")]
-    pub name: String,
-    #[serde(rename = "displayIconSmall")]
-    pub icon_link: String
-}
-
-#[derive(serde::Deserialize, Debug, Default, Clone)]
-pub struct MapDetail {
-    pub data: Vec<MapDetailData>,
-}
-
-#[derive(serde::Deserialize, Debug, Default, Clone)]
-pub struct MapDetailData {
-    #[serde(rename = "uuid")]
-    pub uuid: String,
-    #[serde(rename = "displayName")]
-    pub name: String,
-    #[serde(rename = "splash")]
-    pub icon_link: String,
-    #[serde(rename = "mapUrl")]
-    pub path: String,
-}
-
 #[derive(serde::Deserialize, Debug, Default)]
 pub struct CurrentGamePlayer {
     #[serde(rename = "MatchID")]
@@ -145,65 +113,6 @@ impl CurrentGamePlayer {
             },
             Err(_) => None,
         }
-    }
-
-    pub fn get_agent_details() -> Result<AgentDetail, Error> {
-        let client = match reqwest::blocking::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build() {
-            Ok(client) => client,
-            Err(_) => return Err(Error::ClientError),
-        };
-
-        let resp = match client.get("https://valorant-api.com/v1/agents?isPlayableCharacter=true")
-            .send() {
-            Ok(resp) => resp,
-            Err(err) => {
-                return Err(Error::RiotError)
-            }
-        };
-
-        if resp.status().is_success() {
-            return if let Ok(agent_detail) = resp.json::<AgentDetail>() {
-                Ok(agent_detail)
-            } else {
-                Err(Error::NotPreGame)
-            }
-        }
-
-        return Err(Error::Unknown)
-    }
-
-    pub fn get_map_details() -> Result<MapDetail, Error> {
-        let client = match reqwest::blocking::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build() {
-            Ok(client) => client,
-            Err(_) => return Err(Error::ClientError),
-        };
-
-        let resp = match client.get("https://valorant-api.com/v1/maps")
-            .send() {
-            Ok(resp) => resp,
-            Err(err) => {
-                println!("{:?}", err);
-                return Err(Error::RiotError)
-            }
-        };
-
-        if resp.status().is_success() {
-            return match resp.json::<MapDetail>() {
-                Ok(map_detail) => {
-                    Ok(map_detail)
-                }
-                Err(err) => {
-                    println!("{:?}", err);
-                    Err(Error::NotPreGame)
-                }
-            }
-        }
-
-        return Err(Error::Unknown)
     }
 
     pub fn get_players(auth: Arc<RiotAuth>, prev_match_id: String) -> Result<(Vec<LoadedPlayer>, String), Error> {
