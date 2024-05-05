@@ -306,7 +306,6 @@ impl eframe::App for MyApp {
                                             }
                                         }
 
-
                                         None
 
                                        // match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
@@ -418,12 +417,14 @@ impl eframe::App for MyApp {
                                 if i == index.to_owned() as usize {
 
                                     if &player.name_history.len() > &0usize {
-                                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                                        if !player.incognito {
+                                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                        ui.label("Previous Usernames: ");
+                                            ui.label("Previous Usernames: ");
 
-                                        for name in &player.name_history {
-                                            ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
+                                            for name in &player.name_history {
+                                                ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
+                                            }
                                         }
                                     }
 
