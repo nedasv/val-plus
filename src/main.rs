@@ -14,6 +14,7 @@ use eframe::egui::{Color32, Layout, Pos2, Rounding, Vec2};
 use poll_promise::Promise;
 use crate::database::{MatchHistory, NameHistory};
 use crate::images::ImageData;
+use crate::r#match::MatchHandler;
 
 mod loader;
 mod auth;
@@ -84,13 +85,13 @@ struct MyApp {
     auth: Option<Arc<RiotAuth>>,
     state: State,
 
-    loaded_players: Option<Vec<LoadedPlayer>>,
-    current_match_id: String,
+    current_match: Option<MatchHandler>,
+
     settings: Settings,
 
     selected_user: Option<u8>,
 
-    promise: Option<Promise<Option<(Vec<LoadedPlayer>, String)>>>,
+    promise: Option<Promise<Option<MatchHandler>>>,
     image_promise: Option<Promise<Option<ImageData>>>,
 
     images: Option<ImageData>,
@@ -294,20 +295,29 @@ impl eframe::App for MyApp {
                                 if let Some(auth) = &self.auth {
                                     // Cloned data to pass into promise
                                     let new_auth = Arc::clone(auth);
-                                    let match_id = self.current_match_id.clone();
 
-                                    self.promise = Some(Promise::spawn_thread("look_for_match", || {
+                                    self.promise = Some(Promise::spawn_thread("look_for_match", move || {
                                        // TODO: Implement pre-game
+                                        let mut match_handler = MatchHandler::new();
 
-                                       match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
-                                           Ok((loaded_players, match_id)) => {
-                                               // (Players, MatchId)
-                                               Some((loaded_players, match_id))
-                                           }
-                                           _ => {
-                                               None
-                                           }
-                                       }
+                                        if let Ok(_) = match_handler.get_match_id(Arc::clone(&new_auth)) {
+                                            if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth)) {
+                                                return Some(match_handler)
+                                            }
+                                        }
+
+
+                                        None
+
+                                       // match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
+                                       //     Ok((loaded_players, match_id)) => {
+                                       //         // (Players, MatchId)
+                                       //         Some((loaded_players, match_id))
+                                       //     }
+                                       //     _ => {
+                                       //         None
+                                       //     }
+                                       // }
                                     }));
 
                                     self.state = State::CheckPromise;
@@ -321,10 +331,9 @@ impl eframe::App for MyApp {
                     if let Some(promise) = &self.promise {
                         if let Some(promise) = promise.ready() {
                             match promise {
-                                Some((players, match_id)) => {
+                                Some(match_handler) => {
                                     println!("promise returned Some");
-                                    self.loaded_players = Some(players.to_owned());
-                                    self.current_match_id = match_id.to_owned();
+                                    self.current_match = Some(match_handler.clone());
                                     self.promise = None;
                                 }
                                 None => {
@@ -365,7 +374,8 @@ impl eframe::App for MyApp {
                 }
             }
 
-            if let Some(players) = &self.loaded_players {
+            if let Some(current_match) = &self.current_match {
+                let players = &current_match.players;
 
                 let f = timeago::Formatter::new();
 
