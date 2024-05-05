@@ -1,16 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use turbosql::{execute, select, Turbosql};
 use crate::auth::get_auth;
-//use crate::loader::{get_client_version, get_lockfile, get_player_info, get_region_shard};
 use crate::loader::Loader;
 
 use std::time;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use eframe::egui;
-use eframe::egui::{Color32, Layout, Pos2, Rounding, Vec2};
+use eframe::egui::{Color32, Vec2};
 use poll_promise::Promise;
 use crate::database::{MatchHistory, NameHistory};
 use crate::images::ImageData;
@@ -23,11 +20,6 @@ mod r#match;
 mod name_service;
 mod database;
 mod images;
-
-pub enum ApplicationError {
-    RetryError(String),
-    RestartError(String),
-}
 
 #[derive(Debug, Clone)]
 struct LoadedPlayer {
@@ -52,14 +44,6 @@ enum TeamType {
     Enemy
 }
 //
-#[derive(Turbosql, Default, Debug, Clone)]
-struct UserDatabase {
-    rowid: Option<i64>,
-    uuid: Option<String>,
-    times_played: Option<i64>,
-    last_played: Option<i64>,
-}
-
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
@@ -158,6 +142,7 @@ impl Settings {
         if (time_now - self.last_checked) > self.refresh_time {
             self.last_checked = time_now;
             return true;
+
         }
 
         return false
@@ -307,16 +292,6 @@ impl eframe::App for MyApp {
                                         }
 
                                         None
-
-                                       // match r#match::CurrentGamePlayer::get_players(new_auth, match_id) {
-                                       //     Ok((loaded_players, match_id)) => {
-                                       //         // (Players, MatchId)
-                                       //         Some((loaded_players, match_id))
-                                       //     }
-                                       //     _ => {
-                                       //         None
-                                       //     }
-                                       // }
                                     }));
 
                                     self.state = State::CheckPromise;
