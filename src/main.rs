@@ -485,8 +485,10 @@ impl eframe::App for MyApp {
                                             }
                                         }
 
+                                        let frame_color = if log.enemy { Color32::from_rgb(41, 31, 41) } else { Color32::from_rgb(31, 41, 41) };
+
                                        egui::Frame::none()
-                                           .fill(Color32::from_rgb(31, 41, 41))
+                                           .fill(frame_color)
                                            .rounding(10.0)
                                            .show(ui, |ui| {
                                                ui.set_max_width(ui.available_width());
@@ -527,12 +529,13 @@ impl eframe::App for MyApp {
                                                });
                                            });
                                     }
+
+
                                 }
                             }
                         }
+                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
                     }
-
-                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
                     ui.label("Made by: nedasv | Discord: 3eu");
                 });
             }
