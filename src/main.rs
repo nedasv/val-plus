@@ -307,13 +307,19 @@ impl eframe::App for MyApp {
                                 if let Some(auth) = &self.auth {
                                     // Cloned data to pass into promise
                                     let new_auth = Arc::clone(auth);
+                                    let mut latest_match_id = String::new();
+
+                                    if let Some(match_handler) = &self.current_match {
+                                        latest_match_id = match_handler.match_id.clone();
+                                    }
 
                                     self.promise = Some(Promise::spawn_thread("look_for_match", move || {
                                        // TODO: Implement pre-game
                                         let mut match_handler = MatchHandler::new();
 
+
                                         if let Ok(_) = match_handler.get_match_id(Arc::clone(&new_auth)) {
-                                            if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth), ) {
+                                            if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth), latest_match_id.clone()) {
                                                 return Some(match_handler)
                                             }
                                         }
@@ -395,6 +401,8 @@ impl eframe::App for MyApp {
                         }
 
                         if res.clicked() {
+                            ui.scroll_to_rect(res.rect, Some(egui::Align::TOP));
+
                             println!("clicked area: {:?}", i);
                             if let Some(index) = self.selected_user {
                                 if i == index.to_owned() as usize {

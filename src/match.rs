@@ -94,7 +94,7 @@ impl MatchHandler {
         }
     }
 
-    pub fn get_match_details(&mut self, auth: Arc<RiotAuth>) -> Result<(), ()> {
+    pub fn get_match_details(&mut self, auth: Arc<RiotAuth>, latest_match_id: String) -> Result<(), ()> {
         return match self.client.get(format!("https://glz-{}-1.{}.a.pvp.net/core-game/v1/matches/{}", auth.region, auth.shard, self.match_id))
             .bearer_auth(&auth.access_token)
             .header("X-Riot-Entitlements-JWT", &auth.token)
@@ -108,9 +108,9 @@ impl MatchHandler {
                         Ok(json) => {
                             self.match_id = json.match_id.clone();
 
-                            // if self.match_id == latest_match_id {
-                            //     return Err(())
-                            // }
+                            if self.match_id == latest_match_id {
+                                return Err(())
+                            }
 
                             self.map_path = json.map_id.clone();
                             self.game_mode = json.gamemode_id.clone();
