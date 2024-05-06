@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use std::cmp::PartialEq;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::auth::get_auth;
@@ -8,7 +9,7 @@ use crate::loader::Loader;
 use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use eframe::{CreationContext, egui, Storage};
-use eframe::egui::{Color32, Vec2};
+use eframe::egui::{Color32, Id, Pos2, Sense, Vec2};
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
@@ -220,30 +221,32 @@ impl eframe::App for MyApp {
 
             // ---- TOP MENU -----
 
-            ui.horizontal(|ui| {
-                if ui.button("Home").clicked() {
-                    self.state = State::Refresh;
-                };
-
-                if self.auth.is_none() {
-                    ui.add_enabled(false, egui::Button::new("Refresh"));
-                } else {
-                    if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
-                        self.settings.last_checked = 0;
-                        self.state = State::ButtonRefresh;
+            if self.state != State::WaitValorant || self.state != State::Load {
+                ui.horizontal(|ui| {
+                    if ui.button("Home").clicked() {
+                        self.state = State::Refresh;
                     };
-                }
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
-                    if ui.button("⚙").clicked() {
-                        self.state = State::Settings;
-                    };
+                    if self.auth.is_none() {
+                        ui.add_enabled(false, egui::Button::new("Refresh"));
+                    } else {
+                        if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
+                            self.settings.last_checked = 0;
+                            self.state = State::ButtonRefresh;
+                        };
+                    }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
+                        if ui.button("⚙").clicked() {
+                            self.state = State::Settings;
+                        };
+                    });
+
                 });
 
-            });
-
-            // Padding
-            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                // Padding
+                ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+            }
 
             // ---- MAIN BODY ----
 
@@ -284,6 +287,9 @@ impl eframe::App for MyApp {
                             self.state = State::Load;
                         }
                     } else {
+
+                        ui.label("Waiting for valorant");
+
                         // do something while not?
                     }
                 }
@@ -375,67 +381,102 @@ impl eframe::App for MyApp {
                 let formatter = timeago::Formatter::new();
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (i, player) in players.iter().filter(|x| x.times_played > 0).enumerate() {
+                    for (i, player) in players.iter().filter(|x| x.times_played > 1).enumerate() {
 
-                        // Player Cards
-                        ui.horizontal(|ui| {
-                            ui.set_max_width(ui.available_width());
-                            ui.set_max_height(80.0);
+                        let res = ui.interact(egui::Rect::from_min_size(ui.next_widget_position(), Vec2::new(ui.available_width(), 80.0)), Id::new(format!("area_{}", i)), Sense::click());
+                        let mut frame_color = Color32::from_rgb(31, 31, 31);
 
-                            // Agent Icon
-                            if let Some(images) = &self.images {
-                                let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase());
 
-                                if let Some(agent_image) = agent_image {
-                                    ui.add(
-                                        egui::Image::new(agent_image.icon.clone())
-                                            .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                            .maintain_aspect_ratio(false)
-                                            .rounding(10.0)
-                                    );
+                        if res.hovered() {
+                            frame_color = Color32::from_rgb(41, 41, 41);
+                            ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                        } else {
+                            frame_color = Color32::from_rgb(31, 31, 31);
+                        }
+
+                        if res.clicked() {
+                            println!("clicked area: {:?}", i);
+                            if let Some(index) = self.selected_user {
+                                if i == index.to_owned() as usize {
+                                    // USER CLICKED ALREADY SELECTED
+                                    self.selected_user = None;
+                                }  else {
+                                    self.selected_user = Some(i as u8);
                                 }
+                            } else {
+                                self.selected_user = Some(i as u8);
                             }
+                        }
 
-                            // TODO: Center widgets
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(20.0); // FIXME: Temp to center vertically
+                        egui::Frame::none()
+                            .fill(frame_color)
+                            .rounding(10.0)
+                            .show(ui, |ui| {
+                                // Player Cards
+                                ui.horizontal(|ui| {
+                                    ui.set_max_width(ui.available_width());
+                                    ui.set_width(ui.available_width());
+                                    ui.set_max_height(80.0);
 
-                                // Data
-                                ui.colored_label(
-                                    Color32::WHITE,
-                                    if !player.incognito {
-                                            format!("{}#{} ({})",
-                                                    &player.name,
-                                                    &player.tag,
-                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
-                                            )
-                                        } else {
-                                            format!("{} ({})",
-                                                    "Incognito", // FIXME: Temp change to agent name
-                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
-                                            )
-                                        }
-                                );
+                                    // Agent Icon
+                                    if let Some(images) = &self.images {
+                                        let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase());
 
-                                // Button
-                                if player.match_history.len() > 0usize {
-                                    let button = ui.button("More Info");
-
-                                    if button.clicked() {
-                                        if let Some(index) = self.selected_user {
-                                            if i == index.to_owned() as usize {
-                                                // USER CLICKED ALREADY SELECTED
-                                                self.selected_user = None;
-                                            }  else {
-                                                self.selected_user = Some(i as u8);
-                                            }
-                                        } else {
-                                            self.selected_user = Some(i as u8);
+                                        if let Some(agent_image) = agent_image {
+                                            ui.add(
+                                                egui::Image::new(agent_image.icon.clone())
+                                                    .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                    .maintain_aspect_ratio(false)
+                                                    .rounding(10.0)
+                                            );
                                         }
                                     }
-                                }
+
+                                    // TODO: Center widgets
+                                    ui.vertical_centered(|ui| {
+                                        //ui.add_space(20.0); // FIXME: Temp to center vertically
+
+                                        // Data
+                                        ui.horizontal_centered(|ui| {
+                                            ui.colored_label(
+                                                Color32::WHITE,
+                                                if !player.incognito {
+                                                    format!("{}#{} ({})",
+                                                            &player.name,
+                                                            &player.tag,
+                                                            formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                                    )
+                                                } else {
+                                                    format!("{} ({})",
+                                                            "Incognito", // FIXME: Temp change to agent name
+                                                            formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                                    )
+                                                }
+                                            );
+                                        });
+
+                                        // Button
+                                        // if player.match_history.len() > 0usize {
+                                        //     let button = ui.button("More Info");
+                                        //
+                                        //     if button.clicked() {
+                                        //         if let Some(index) = self.selected_user {
+                                        //             if i == index.to_owned() as usize {
+                                        //                 // USER CLICKED ALREADY SELECTED
+                                        //                 self.selected_user = None;
+                                        //             }  else {
+                                        //                 self.selected_user = Some(i as u8);
+                                        //             }
+                                        //         } else {
+                                        //             self.selected_user = Some(i as u8);
+                                        //         }
+                                        //     }
+                                        // }
+                                    });
+                                });
                             });
-                        });
+
+
 
                         // History
 
