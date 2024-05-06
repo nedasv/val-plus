@@ -49,7 +49,8 @@ fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([350.0, 350.0])
-            .with_resizable(false)
+            .with_min_inner_size([350.0, 350.0])
+            .with_resizable(true)
             .with_maximize_button(false),
         ..Default::default()
     };
@@ -70,14 +71,11 @@ struct MyApp {
     state: State,
 
     current_match: Option<MatchHandler>,
-
     settings: Settings,
-
     selected_user: Option<u8>,
 
     promise: Option<Promise<Option<MatchHandler>>>,
     image_promise: Option<Promise<Option<ImageData>>>,
-
     images: Option<ImageData>,
 }
 
@@ -197,6 +195,7 @@ impl RiotAuth {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.set_max_width(ui.available_width());
 
             // ---- TOP MENU -----
 
@@ -286,7 +285,7 @@ impl eframe::App for MyApp {
                                         let mut match_handler = MatchHandler::new();
 
                                         if let Ok(_) = match_handler.get_match_id(Arc::clone(&new_auth)) {
-                                            if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth)) {
+                                            if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth), ) {
                                                 return Some(match_handler)
                                             }
                                         }
@@ -351,27 +350,54 @@ impl eframe::App for MyApp {
             if let Some(current_match) = &self.current_match {
                 let players = &current_match.players;
 
-                let f = timeago::Formatter::new();
+                let formatter = timeago::Formatter::new();
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (i, player) in players.iter().enumerate() {
-                        if player.times_played > 0 {
+                    for (i, player) in players.iter().filter(|x| x.times_played > 0).enumerate() {
 
-                            ui.horizontal(|ui| {
+                        // Player Cards
+                        ui.horizontal(|ui| {
+                            ui.set_max_width(ui.available_width());
+                            ui.set_max_height(80.0);
 
-                                if let Some(image_data) = &self.images {
+                            // Agent Icon
+                            if let Some(images) = &self.images {
+                                let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase());
+
+                                if let Some(agent_image) = agent_image {
                                     ui.add(
-                                        egui::Image::new(image_data.agents.iter().find(|x| x.uuid == player.agent_id).unwrap().icon.clone())
+                                        egui::Image::new(agent_image.icon.clone())
                                             .fit_to_exact_size(Vec2::new(80.0, 80.0))
                                             .maintain_aspect_ratio(false)
                                             .rounding(10.0)
                                     );
                                 }
+                            }
 
-                                ui.colored_label(Color32::WHITE,  format!("{}#{} ({})", if !player.incognito { player.name.clone() } else { "N/A".to_string() }, if !player.incognito { player.tag.clone() } else { "N/A".to_string() }, f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))));
+                            // TODO: Center widgets
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(20.0); // FIXME: Temp to center vertically
 
+                                // Data
+                                ui.colored_label(
+                                    Color32::WHITE,
+                                    if !player.incognito {
+                                            format!("{}#{} ({})",
+                                                    &player.name,
+                                                    &player.tag,
+                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                            )
+                                        } else {
+                                            format!("{} ({})",
+                                                    "Incognito", // FIXME: Temp change to agent name
+                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                            )
+                                        }
+                                );
+
+                                // Button
                                 if player.match_history.len() > 0usize {
-                                    let button = ui.button("Show More");
+                                    let button = ui.button("More Info");
 
                                     if button.clicked() {
                                         if let Some(index) = self.selected_user {
@@ -387,98 +413,104 @@ impl eframe::App for MyApp {
                                     }
                                 }
                             });
+                        });
 
-                            if let Some(index) = self.selected_user {
-                                if i == index.to_owned() as usize {
+                        // History
 
-                                    if &player.name_history.len() > &0usize {
-                                        if !player.incognito {
-                                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                        if let Some(selected_user) = &self.selected_user {
+                            if i == selected_user.to_owned() as usize {
+                                if !player.incognito {
 
-                                            ui.label("Previous Usernames: ");
-
-                                            for name in &player.name_history {
-                                                ui.label(format!("{}#{} ({})", name.name.clone().unwrap(), name.tag.clone().unwrap(), f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name.name_time.clone().unwrap()).max(0) as u64))));
-                                            }
-                                        }
-                                    }
-
-                                    if &player.match_history.len() > &0usize {
-
+                                    // Name History
+                                    if player.name_history.len() > 0usize { // 1 to ignore current name
                                         ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                        for log in player.match_history.iter().rev().take(5) {
+                                        ui.label("Previous Usernames: ");
 
-                                            let mut map_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
-                                            let mut map_name = "Unknown".to_string();
-                                            let mut enemy = false;
-                                            let mut agent_icon_url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.thespike.gg%2FEmmanuel%2Fhaven4_1666929773076.jpg&f=1&nofb=1&ipt=ca70048ad86df92c1a1482f4c1d0f55ef9c4ba898331097417ac015ddba5a086&ipo=images".to_string();
+                                        for name_history in &player.name_history {
+                                            ui.label(
+                                                format!("{}#{} ({})",
+                                                    &name_history.name,
+                                                    &name_history.tag,
+                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone()).max(0) as u64)),
+                                                )
+                                            );
+                                        }
+                                    }
+                                }
 
-                                            if let Some(image_data) = &self.images {
-                                                let map = image_data.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().unwrap().trim().to_lowercase()).unwrap();
+                                // Match History
+                                if player.match_history.len() > 0usize {
+                                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                                agent_icon_url = image_data.agents.iter().find(|x| x.uuid == log.agent_id.clone().unwrap()).unwrap().icon.clone();
+                                    for log in player.match_history.iter().rev().take(5) {
+                                       let (mut agent_image, mut agent_name) = (String::new(), String::new());
+                                       let (mut map_image, mut map_name) = (String::new(), String::new());
 
-                                                map_icon_url = map.icon.clone();
-                                                map_name = map.name.clone();
-                                                if log.enemy.clone().unwrap() {
-                                                    enemy = true;
-                                                }
+                                        if let Some(images) = &self.images {
+                                            let agent = images.agents.iter().find(|x| x.uuid == log.agent_id.to_lowercase());
+
+                                            if let Some(agent) = agent {
+                                                agent_image = agent.icon.clone();
+                                                agent_name = agent.name.clone();
                                             }
 
-                                            egui::Frame::none()
-                                                .fill(Color32::from_rgb(31, 31, 31))
-                                                .rounding(10.0)
-                                                .show(ui, |ui| {
-                                                    ui.set_width(ui.available_width());
-                                                    ui.set_height(80.0);
-                                                    ui.set_max_height(80.0);
+                                            let map = images.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().trim().to_lowercase());
 
-                                                    ui.horizontal(|ui| {
-                                                        ui.add(
-                                                            egui::Image::new(agent_icon_url)
-                                                                .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                                .maintain_aspect_ratio(false)
-                                                                .rounding(10.0)
-                                                        );
-
-                                                        ui.vertical(|ui| {
-
-                                                            ui.add_space(15.0);
-
-                                                            ui.colored_label(Color32::WHITE, map_name);
-
-                                                            if enemy {
-                                                                ui.colored_label(Color32::RED, "Enemy");
-                                                            } else {
-                                                                ui.colored_label(Color32::GREEN, "Team");
-                                                            }
-
-
-                                                            ui.colored_label(Color32::WHITE, format!("{}", f.convert(time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time.unwrap()).max(0) as u64))));
-                                                        });
-
-                                                        ui.add_space(ui.available_width() - 80.0);
-
-                                                        ui.add(
-                                                            egui::Image::new(map_icon_url)
-                                                                .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                                .maintain_aspect_ratio(false)
-                                                                .rounding(10.0)
-                                                        );
-                                                    });
-                                                });
+                                            if let Some(map) = map {
+                                                map_image = map.icon.clone();
+                                                map_name = map.name.clone();
+                                            }
                                         }
-                                    } else {
-                                        ui.label("No history");
+
+                                       egui::Frame::none()
+                                           .fill(Color32::from_rgb(31, 41, 41))
+                                           .rounding(10.0)
+                                           .show(ui, |ui| {
+                                               ui.set_max_width(ui.available_width());
+                                               ui.set_max_height(80.0);
+
+                                               ui.horizontal(|ui| {
+                                                   // Agent Icon
+                                                   ui.add(
+                                                       egui::Image::new(agent_image)
+                                                           .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                           .maintain_aspect_ratio(false)
+                                                           .rounding(10.0)
+                                                   );
+
+                                                   // Data
+                                                   ui.vertical(|ui| {
+                                                       ui.add_space(15.0);
+                                                       ui.colored_label(Color32::WHITE, map_name);
+
+                                                       if log.enemy {
+                                                           ui.colored_label(Color32::RED, "Enemy");
+                                                       }  else {
+                                                           ui.colored_label(Color32::GREEN, "Team");
+                                                       }
+
+                                                       ui.colored_label(Color32::WHITE, format!("{}", formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time).max(0) as u64))));
+                                                   });
+
+                                                   ui.add_space(ui.available_width() - 80.0);
+
+                                                   // Map Icon
+                                                   ui.add(
+                                                       egui::Image::new(map_image)
+                                                           .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                           .maintain_aspect_ratio(false)
+                                                           .rounding(10.0)
+                                                   );
+                                               });
+                                           });
                                     }
                                 }
                             }
-
-                            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
                         }
                     }
 
+                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
                     ui.label("Made by: nedasv | Discord: 3eu");
                 });
             }

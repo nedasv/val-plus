@@ -92,5 +92,9 @@ impl ImageData {
             Err(_) => return Err(()),
         }
     }
+
+    pub fn try_store() -> Result<(), ()> {
+        Err(())
+    }
 }
 

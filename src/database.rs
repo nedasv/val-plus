@@ -12,22 +12,22 @@ pub struct UserDatabase {
 #[derive(Turbosql, Default, Debug, Clone)]
 pub struct MatchHistory {
     pub rowid: Option<i64>,
-    pub uuid: Option<String>,
-    pub match_id: Option<String>,
-    pub map_id: Option<String>,
-    pub gamemode_id: Option<String>,
-    pub enemy: Option<bool>,
-    pub agent_id: Option<String>,
-    pub match_time: Option<i64>
+    pub uuid: String,
+    pub match_id: String,
+    pub map_id: String,
+    pub gamemode_id: String,
+    pub enemy: bool,
+    pub agent_id: String,
+    pub match_time: i64,
 }
 
 #[derive(Turbosql, Default, Debug, Clone)]
 pub struct NameHistory {
     pub rowid: Option<i64>,
-    pub uuid: Option<String>,
-    pub name: Option<String>,
-    pub tag: Option<String>,
-    pub name_time: Option<i64>
+    pub uuid: String,
+    pub name: String,
+    pub tag: String,
+    pub name_time: i64,
 }
 
 fn user_exits(uuid: &String) -> bool {
@@ -84,10 +84,10 @@ pub fn get_user_name_history(uuid: String) -> Result<Vec<NameHistory>, ()>{
 pub fn add_new_name(uuid: String, name: String, tag: String) -> Result<(), ()> {
     if !name_exists(&uuid, &name, &tag) {
         let res = NameHistory {
-            uuid: Some(uuid),
-            name: Some(name),
-            tag: Some(tag),
-            name_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+            uuid,
+            name,
+            tag,
+            name_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
             ..Default::default()
         }.insert();
 
@@ -120,13 +120,13 @@ pub fn get_user_match_history(uuid: String) -> Result<Vec<MatchHistory>, ()>{
 pub fn add_new_match(uuid: String, match_id: String, map_id: String, gamemode_id: String, agent_id: String, enemy: bool) -> Result<(), ()> {
     if !match_exists(&uuid, &match_id) {
         let res = MatchHistory {
-            uuid: Some(uuid),
-            match_id: Some(match_id),
-            match_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-            map_id: Some(map_id),
-            gamemode_id: Some(gamemode_id),
-            agent_id: Some(agent_id),
-            enemy: Some(enemy),
+            uuid,
+            match_id,
+            match_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            map_id,
+            gamemode_id,
+            agent_id,
+            enemy,
             ..Default::default()
         }.insert();
 

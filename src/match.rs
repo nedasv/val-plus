@@ -107,6 +107,11 @@ impl MatchHandler {
                     match res.json::<CurrentGameMatch>() {
                         Ok(json) => {
                             self.match_id = json.match_id.clone();
+
+                            // if self.match_id == latest_match_id {
+                            //     return Err(())
+                            // }
+
                             self.map_path = json.map_id.clone();
                             self.game_mode = json.gamemode_id.clone();
 
