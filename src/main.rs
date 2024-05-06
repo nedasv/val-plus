@@ -6,10 +6,11 @@ use crate::auth::get_auth;
 use crate::loader::Loader;
 
 use std::time;
-use std::time::{SystemTime, UNIX_EPOCH};
-use eframe::egui;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use eframe::{CreationContext, egui, Storage};
 use eframe::egui::{Color32, Vec2};
 use poll_promise::Promise;
+use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
 use crate::images::ImageData;
 use crate::r#match::MatchHandler;
@@ -62,7 +63,7 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|cc| {
 
             if let Some(dir) = directories_next::ProjectDirs::from("", "", "Val+") {
-                if let Err(()) = turbosql::set_db_path(dir.data_dir().join("users.sqlite").as_path()) {
+                if let Err(_) = turbosql::set_db_path(dir.data_dir().join("users.sqlite").as_path()) {
                     println!("error setting db path")
                 }
             }
@@ -87,6 +88,17 @@ struct MyApp {
     image_promise: Option<Promise<Option<ImageData>>>,
     images: Option<ImageData>,
 }
+
+// impl MyApp {
+//     fn new(cc: &CreationContext) -> Self {
+//         let storage = cc.storage.unwrap().get_string("settings");
+//
+//         Self {
+//             settings: if let Some(settings) = storage { serde_json::from_str::<Settings>(&settings).unwrap() } else { Settings::default() },
+//             ..Default::default()
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 enum State {
@@ -117,7 +129,7 @@ struct RiotAuth {
     token: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     auto_refresh: bool,
     wait_time: u64,
@@ -238,6 +250,7 @@ impl eframe::App for MyApp {
             match &self.state {
 
                 State::Load => {
+
                     self.image_promise = Some(Promise::spawn_thread("load_images", || {
                         let mut image_data = ImageData::new();
 
@@ -525,4 +538,14 @@ impl eframe::App for MyApp {
             }
         });
     }
+
+    // fn save(&mut self, storage: &mut dyn Storage) {
+    //     if let Ok(settings) = serde_json::to_string(&self.settings) {
+    //         storage.set_string("settings", settings);
+    //     }
+    // }
+    //
+    // fn auto_save_interval(&self) -> Duration {
+    //     Duration::from_secs(10)
+    // }
 }
