@@ -618,6 +618,9 @@ name = "bitflags"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitstream-io"
@@ -1155,6 +1158,7 @@ checksum = "020e2ccef6bbcec71dbc542f7eed64a5846fc3076727f5746da8fd307c91bab2"
 dependencies = [
  "bytemuck",
  "cocoa",
+ "directories-next",
  "document-features",
  "egui",
  "egui-wgpu",
@@ -1171,6 +1175,8 @@ dependencies = [
  "percent-encoding",
  "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.0",
+ "ron",
+ "serde",
  "static_assertions",
  "thiserror",
  "wasm-bindgen",
@@ -1192,6 +1198,7 @@ dependencies = [
  "epaint",
  "log",
  "nohash-hasher",
+ "ron",
  "serde",
 ]
 
@@ -1224,6 +1231,7 @@ dependencies = [
  "egui",
  "log",
  "raw-window-handle 0.6.0",
+ "serde",
  "smithay-clipboard",
  "web-time",
  "webbrowser",
@@ -3465,6 +3473,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
+dependencies = [
+ "base64 0.21.7",
+ "bitflags 2.4.0",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4439,6 +4459,7 @@ dependencies = [
 name = "valorant-tracker"
 version = "0.1.0"
 dependencies = [
+ "directories-next",
  "eframe",
  "egui_extras",
  "ehttp",

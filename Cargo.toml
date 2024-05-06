@@ -13,7 +13,7 @@ regex = { version = "1.10.4" }
 image = { version = "0.25.1", features = ["jpeg", "png"] }
 serde_json = {  version = "1.0" }
 turbosql = { version = "0.10.0" }
-eframe = {  version = "0.27.2", features = ["default"] }
+eframe = {  version = "0.27.2", features = ["default", "persistence"] }
 env_logger = { version = "0.11.3", features = [
     "auto-color",
     "humantime",
@@ -25,3 +25,4 @@ egui_extras = { version = "0.27", features = ["all_loaders", "http", "image", "f
 poll-promise = "0.3.0"
 timeago = "0.4.2"
 log = "0.4.21"
+directories-next = "2.0.0"

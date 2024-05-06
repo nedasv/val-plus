@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::auth::get_auth;
 use crate::loader::Loader;
@@ -52,12 +53,20 @@ fn main() -> Result<(), eframe::Error> {
             .with_min_inner_size([350.0, 350.0])
             .with_resizable(true)
             .with_maximize_button(false),
+        persist_window: true,
         ..Default::default()
     };
     eframe::run_native(
         "Val+",
         options,
         Box::new(|cc| {
+
+            if let Some(dir) = directories_next::ProjectDirs::from("", "", "Val+") {
+                if let Err(()) = turbosql::set_db_path(dir.data_dir().join("users.sqlite").as_path()) {
+                    println!("error setting db path")
+                }
+            }
+
             // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
             Box::<MyApp>::default()
