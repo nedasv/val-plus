@@ -23,6 +23,7 @@ mod r#match;
 mod name_service;
 mod database;
 mod images;
+mod converter;
 
 #[derive(Debug, Clone)]
 struct LoadedPlayer {
@@ -86,6 +87,7 @@ struct MyApp {
     selected_user: Option<u8>,
 
     promise: Option<Promise<Option<MatchHandler>>>,
+    import_promise: Option<Promise<(i32, i32, i32)>>,
     image_promise: Option<Promise<Option<ImageData>>>,
     images: Option<ImageData>,
 }
@@ -236,6 +238,10 @@ impl eframe::App for MyApp {
                         };
                     }
 
+                    if let Some(cur_match) = &self.current_match {
+                        ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
+                    }
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
                         if ui.button("⚙").clicked() {
                             self.state = State::Settings;
@@ -253,7 +259,6 @@ impl eframe::App for MyApp {
             match &self.state {
 
                 State::Load => {
-
                     self.image_promise = Some(Promise::spawn_thread("load_images", || {
                         let mut image_data = ImageData::new();
 
@@ -274,6 +279,26 @@ impl eframe::App for MyApp {
                         ui.label("Auto Refresh: ");
                         ui.checkbox(&mut self.settings.auto_refresh, "");
                     });
+
+                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+                    if ui.button("Import VRY data").clicked() {
+                        self.import_promise = Some(Promise::spawn_thread("import_data", || {
+
+                            if let Some(dir) = directories_next::ProjectDirs::from("", "", "vry") {
+                                let path = dir.data_dir().join("stats.json").as_path();
+
+                                let cv = converter::Converter::get_file(Path::new(&String::from(r"C:\Users\nedas\Downloads\stats.json")));
+                                let (success, fail, total) = converter::Converter::convert_vry_history(cv);
+
+                                return (success, fail, total)
+                            }
+
+                            return (0, 0, 0)
+                        }));
+
+                        self.state = State::CheckPromise;
+                    }
                 }
 
                 State::WaitValorant => {
@@ -317,7 +342,6 @@ impl eframe::App for MyApp {
                                        // TODO: Implement pre-game
                                         let mut match_handler = MatchHandler::new();
 
-
                                         if let Ok(_) = match_handler.get_match_id(Arc::clone(&new_auth)) {
                                             if let Ok(_) = match_handler.get_match_details(Arc::clone(&new_auth), latest_match_id.clone()) {
                                                 return Some(match_handler)
@@ -355,6 +379,14 @@ impl eframe::App for MyApp {
                         }
                     }
 
+                    if let Some(promise) = &self.import_promise {
+                        if let Some((success, fail, total)) = promise.ready() {
+                            ui.label(format!("Successfully imported: {}/{} matches", success, total));
+                        } else {
+                            ui.label("Importing data please wait...");
+                        }
+                    }
+
                     if let Some(promise) = &self.image_promise {
                         if let Some(promise) = promise.ready() {
                             match promise {
@@ -388,6 +420,8 @@ impl eframe::App for MyApp {
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (i, player) in players.iter().filter(|x| x.times_played > 1).enumerate() {
+
+                        //println!("{:?}", player.agent_id);
 
                         let res = ui.interact(egui::Rect::from_min_size(ui.next_widget_position(), Vec2::new(ui.available_width(), 80.0)), Id::new(format!("area_{}", i)), Sense::click());
                         let mut frame_color = Color32::from_rgb(31, 31, 31);
@@ -428,7 +462,7 @@ impl eframe::App for MyApp {
 
                                     // Agent Icon
                                     if let Some(images) = &self.images {
-                                        let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase());
+                                        let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase() || x.name == player.agent_id.to_lowercase());
 
                                         if let Some(agent_image) = agent_image {
                                             ui.add(
@@ -503,7 +537,7 @@ impl eframe::App for MyApp {
                                                 format!("{}#{} ({})",
                                                     &name_history.name,
                                                     &name_history.tag,
-                                                    formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone()).max(0) as u64)),
+                                                    formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone().unwrap()).max(0) as u64)),
                                                 )
                                             );
                                         }
@@ -514,19 +548,23 @@ impl eframe::App for MyApp {
                                 if player.match_history.len() > 0usize {
                                     ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                    for log in player.match_history.iter().rev().take(5) {
+                                    //println!("{:?}", player.match_history);
+
+                                    for log in player.match_history.iter().rev().take(150) {
+                                        println!("{:?}", log.agent_id);
+
                                        let (mut agent_image, mut agent_name) = (String::new(), String::new());
                                        let (mut map_image, mut map_name) = (String::new(), String::new());
 
                                         if let Some(images) = &self.images {
-                                            let agent = images.agents.iter().find(|x| x.uuid == log.agent_id.to_lowercase());
+                                            let agent = images.agents.iter().find(|x| x.uuid == log.agent_id.to_lowercase() || x.name.to_lowercase() == log.agent_id.to_lowercase());
 
                                             if let Some(agent) = agent {
                                                 agent_image = agent.icon.clone();
                                                 agent_name = agent.name.clone();
                                             }
 
-                                            let map = images.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().trim().to_lowercase());
+                                            let map = images.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().trim().to_lowercase() || x.name.to_lowercase() == log.map_id.clone().to_lowercase().trim_matches('\"'));
 
                                             if let Some(map) = map {
                                                 map_image = map.icon.clone();
@@ -534,7 +572,7 @@ impl eframe::App for MyApp {
                                             }
                                         }
 
-                                        let frame_color = if log.enemy { Color32::from_rgb(41, 31, 41) } else { Color32::from_rgb(31, 41, 41) };
+                                        let frame_color = if log.enemy.unwrap() { Color32::from_rgb(41, 31, 41) } else { Color32::from_rgb(31, 41, 41) };
 
                                        egui::Frame::none()
                                            .fill(frame_color)
@@ -557,7 +595,7 @@ impl eframe::App for MyApp {
                                                        ui.add_space(15.0);
                                                        ui.colored_label(Color32::WHITE, map_name);
 
-                                                       if log.enemy {
+                                                       if log.enemy.unwrap() {
                                                            ui.colored_label(Color32::RED, "Enemy");
                                                        }  else {
                                                            ui.colored_label(Color32::GREEN, "Team");

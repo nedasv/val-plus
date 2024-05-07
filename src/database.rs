@@ -4,9 +4,9 @@ use turbosql::{execute, select, Turbosql, update};
 #[derive(Turbosql, Default, Debug, Clone)]
 pub struct UserDatabase {
     pub rowid: Option<i64>,
-    pub uuid: Option<String>,
-    pub times_played: Option<i64>,
-    pub last_played: Option<i64>
+    pub uuid: String,
+    pub times_played: i64,
+    pub last_played: i64,
 }
 
 #[derive(Turbosql, Default, Debug, Clone)]
@@ -15,8 +15,8 @@ pub struct MatchHistory {
     pub uuid: String,
     pub match_id: String,
     pub map_id: String,
-    pub gamemode_id: String,
-    pub enemy: bool,
+    pub gamemode_id: Option<String>,
+    pub enemy: Option<bool>,
     pub agent_id: String,
     pub match_time: i64,
 }
@@ -27,7 +27,7 @@ pub struct NameHistory {
     pub uuid: String,
     pub name: String,
     pub tag: String,
-    pub name_time: i64,
+    pub name_time: Option<i64>,
 }
 
 fn user_exits(uuid: &String) -> bool {
@@ -38,8 +38,9 @@ fn user_exits(uuid: &String) -> bool {
 }
 fn add_user(uuid: &String) -> Result<(), ()> {
     let res = UserDatabase {
-        uuid: Some(uuid.clone()),
-        times_played: Some(0),
+        uuid: uuid.clone(),
+        times_played: 0,
+        last_played: 0,
         ..Default::default()
     }.insert();
 
@@ -71,6 +72,20 @@ pub fn update_user(uuid: String) -> Result<(), ()> {
     Err(())
 }
 
+pub fn add_user_full(uuid: String, times_played: i64, last_played: i64) -> Result<(), ()> {
+    let res = UserDatabase {
+        uuid: uuid.clone(),
+        times_played,
+        last_played,
+        ..Default::default()
+    }.insert();
+
+    if res.is_ok() {
+        return Ok(())
+    }
+    Err(())
+}
+
 pub fn get_user_name_history(uuid: String) -> Result<Vec<NameHistory>, ()>{
     if select!(NameHistory "WHERE uuid=" uuid).is_ok() {
         if let Ok(history) = select!(Vec<NameHistory> "WHERE uuid=" uuid) {
@@ -87,7 +102,7 @@ pub fn add_new_name(uuid: String, name: String, tag: String) -> Result<(), ()> {
             uuid,
             name,
             tag,
-            name_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            name_time: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
             ..Default::default()
         }.insert();
 
@@ -117,21 +132,23 @@ pub fn get_user_match_history(uuid: String) -> Result<Vec<MatchHistory>, ()>{
     Err(())
 }
 
-pub fn add_new_match(uuid: String, match_id: String, map_id: String, gamemode_id: String, agent_id: String, enemy: bool) -> Result<(), ()> {
+pub fn add_new_match(uuid: String, match_id: String, map_id: String, gamemode_id: String, agent_id: String, enemy: bool, time_played: i64) -> Result<(), ()> {
     if !match_exists(&uuid, &match_id) {
         let res = MatchHistory {
             uuid,
             match_id,
-            match_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            match_time: time_played,
             map_id,
-            gamemode_id,
+            gamemode_id: Some(gamemode_id),
             agent_id,
-            enemy,
+            enemy: Some(enemy),
             ..Default::default()
         }.insert();
 
         if res.is_ok() {
             return Ok(())
+        } else {
+            println!("{:?}", res);
         }
     }
 

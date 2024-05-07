@@ -18,9 +18,19 @@ pub struct CurrentGameMatch {
     pub map_id: String,
     #[serde(rename = "ModeID")]
     pub gamemode_id: String,
+    #[serde(rename = "GamePodID")]
+    pub game_pod: String,
+    // #[serde(rename = "ConnectionDetails")]
+    // pub connection_details: ConnectionDetails,
     #[serde(rename = "Players")]
     pub players: Vec<Player>,
 }
+
+// #[derive(serde::Deserialize, Debug, Default)]
+// pub struct ConnectionDetails {
+//     #[serde(rename = "GameServerHosts")]
+//     pub servers: Vec<String>,
+//}
 
 #[derive(serde::Deserialize, Debug, Default)]
 pub struct Player {
@@ -55,6 +65,7 @@ pub struct MatchHandler {
     pub game_type: String,
     pub map_path: String,
     pub game_mode: String,
+    pub server: String,
     pub players: Vec<LoadedPlayer>,
 }
 
@@ -112,8 +123,18 @@ impl MatchHandler {
                                 return Err(())
                             }
 
+                            println!("{:?}", json);
+
                             self.map_path = json.map_id.clone();
                             self.game_mode = json.gamemode_id.clone();
+
+                            // get server
+                            let mut server = String::new();
+
+                            let parts: Vec<&str> = json.game_pod.split('-').collect();
+                            let result = parts.get(parts.len() - 2).unwrap_or(&"");
+
+                            self.server = result.to_string();
 
                             let player_ids: Vec<String> = json.players.iter().map(|player| player.player_identity.uuid.clone()).collect();
                             let time_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
@@ -143,8 +164,8 @@ impl MatchHandler {
                                     }
 
                                     if let Ok(user) = database::get_user(name.uuid.clone()) {
-                                        times_played = user.times_played.unwrap_or(0);
-                                        last_played = user.last_played.unwrap_or(0);
+                                        times_played = user.times_played;
+                                        last_played = user.last_played;
                                     } else {
                                         println!("Couldnt get user")
                                     }
@@ -161,7 +182,7 @@ impl MatchHandler {
                                         println!("Failed to add new name")
                                     }
 
-                                    if let Ok(_) = database::add_new_match(name.uuid.clone(), json.match_id.clone(), json.map_id.clone(), json.gamemode_id.clone(), player.agent_id.clone(), !(player.team_id == player_team)) {
+                                    if let Ok(_) = database::add_new_match(name.uuid.clone(), json.match_id.clone(), json.map_id.clone(), json.gamemode_id.clone(), player.agent_id.clone(), !(player.team_id == player_team), time_now) {
                                         println!("Added new match successfully")
                                     } else {
                                         println!("Failed to add new match")
