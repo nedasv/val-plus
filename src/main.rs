@@ -284,11 +284,13 @@ impl eframe::App for MyApp {
 
                     if ui.button("Import VRY data").clicked() {
                         self.import_promise = Some(Promise::spawn_thread("import_data", || {
-
                             if let Some(dir) = directories_next::ProjectDirs::from("", "", "vry") {
-                                let path = dir.data_dir().join("stats.json").as_path();
+                                let path = dir.clone().data_dir().parent().unwrap().join("stats.json");
+                                let new_path = path.as_path();
 
-                                let cv = converter::Converter::get_file(Path::new(&String::from(r"C:\Users\nedas\Downloads\stats.json")));
+                                println!("{:?}", new_path.as_os_str().to_string_lossy());
+
+                                let cv = converter::Converter::get_file(new_path.clone());
                                 let (success, fail, total) = converter::Converter::convert_vry_history(cv);
 
                                 return (success, fail, total)
