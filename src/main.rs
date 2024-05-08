@@ -9,7 +9,7 @@ use crate::loader::Loader;
 use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use eframe::{CreationContext, egui, Storage};
-use eframe::egui::{Color32, Id, Pos2, Sense, Vec2};
+use eframe::egui::{Color32, Id, Pos2, Sense, Ui, Vec2};
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
@@ -24,6 +24,7 @@ mod name_service;
 mod database;
 mod images;
 mod converter;
+
 
 #[derive(Debug, Clone)]
 struct LoadedPlayer {
@@ -80,7 +81,9 @@ fn main() -> Result<(), eframe::Error> {
 #[derive(Default)]
 struct MyApp {
     auth: Option<Arc<RiotAuth>>,
+
     state: State,
+    page: Page,
 
     current_match: Option<MatchHandler>,
     settings: Settings,
@@ -92,34 +95,23 @@ struct MyApp {
     images: Option<ImageData>,
 }
 
-// impl MyApp {
-//     fn new(cc: &CreationContext) -> Self {
-//         let storage = cc.storage.unwrap().get_string("settings");
-//
-//         Self {
-//             settings: if let Some(settings) = storage { serde_json::from_str::<Settings>(&settings).unwrap() } else { Settings::default() },
-//             ..Default::default()
-//         }
-//     }
-// }
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 enum State {
     Load,
     Refresh,
     ButtonRefresh,
+    #[default]
     WaitValorant,
     CheckPromise,
     WaitMatch,
+    }
+
+#[derive(Default, Debug, Clone, PartialEq)]
+enum Page {
+    #[default]
+    Home,
     Settings,
 }
-
-impl Default for State {
-    fn default() -> Self {
-        Self::WaitValorant
-    }
-}
-
 #[derive(Debug, Clone)]
 struct RiotAuth {
     access_token: String,
@@ -195,9 +187,7 @@ impl RiotAuth {
 
         if let Some((port, password)) = loader.get_port_and_password() {
             if let Some((token, access_token)) = get_auth(port.clone(), password.clone()) {
-                println!("here2");
                 if let Some((region, shard)) = loader.get_region_and_shard() {
-                    println!("here3");
                     return Some(Self {
                         access_token: access_token.clone(),
                         client_ver: loader.get_client_version(port.clone(), password.clone()).unwrap(),
@@ -216,45 +206,266 @@ impl RiotAuth {
     }
 }
 
+impl MyApp {
+    fn settings_page(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Auto Refresh: ");
+            ui.checkbox(&mut self.settings.auto_refresh, "");
+        });
+
+        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+        if ui.button("Import VRY data").clicked() {
+            self.import_promise = Some(Promise::spawn_thread("import_data", || {
+                if let Some(dir) = directories_next::ProjectDirs::from("", "", "vry") {
+                    let path = dir.clone().data_dir().parent().unwrap().join("stats.json");
+                    let new_path = path.as_path();
+
+                    println!("{:?}", new_path.as_os_str().to_string_lossy());
+
+                    let cv = converter::Converter::get_file(new_path.clone());
+                    let (success, fail, total) = converter::Converter::convert_vry_history(cv);
+
+                    return (success, fail, total)
+                }
+
+                return (0, 0, 0)
+            }));
+
+            self.state = State::CheckPromise;
+        }
+    }
+
+    fn home_page(&mut self, ctx: &egui::Context, ui: &mut Ui) {
+        if let Some(current_match) = &self.current_match {
+            let players = &current_match.players;
+
+            let formatter = timeago::Formatter::new();
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for (i, player) in players.iter().filter(|x| x.times_played > 1).enumerate() {
+
+                    //println!("{:?}", player.agent_id);
+
+                    let res = ui.interact(egui::Rect::from_min_size(ui.next_widget_position(), Vec2::new(ui.available_width(), 80.0)), Id::new(format!("area_{}", i)), Sense::click());
+                    let mut frame_color = Color32::from_rgb(31, 31, 31);
+
+
+                    if res.hovered() {
+                        frame_color = Color32::from_rgb(41, 41, 41);
+                        ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                    } else {
+                        frame_color = Color32::from_rgb(31, 31, 31);
+                    }
+
+                    if res.clicked() {
+                        ui.scroll_to_rect(res.rect, Some(egui::Align::TOP));
+
+                        println!("clicked area: {:?}", i);
+                        if let Some(index) = self.selected_user {
+                            if i == index.to_owned() as usize {
+                                // USER CLICKED ALREADY SELECTED
+                                self.selected_user = None;
+                            }  else {
+                                self.selected_user = Some(i as u8);
+                            }
+                        } else {
+                            self.selected_user = Some(i as u8);
+                        }
+                    }
+
+                    egui::Frame::none()
+                        .fill(frame_color)
+                        .rounding(10.0)
+                        .show(ui, |ui| {
+                            // Player Cards
+                            ui.horizontal(|ui| {
+                                ui.set_max_width(ui.available_width());
+                                ui.set_width(ui.available_width());
+                                ui.set_max_height(80.0);
+
+                                // Agent Icon
+                                if let Some(images) = &self.images {
+                                    let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase() || x.name == player.agent_id.to_lowercase());
+
+                                    if let Some(agent_image) = agent_image {
+                                        ui.add(
+                                            egui::Image::new(agent_image.icon.clone())
+                                                .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                .maintain_aspect_ratio(false)
+                                                .rounding(10.0)
+                                        );
+                                    }
+                                }
+
+                                // TODO: Center widgets
+                                ui.vertical_centered(|ui| {
+                                    //ui.add_space(20.0); // FIXME: Temp to center vertically
+
+                                    // Data
+                                    ui.horizontal_centered(|ui| {
+                                        ui.colored_label(
+                                            Color32::WHITE,
+                                            if !player.incognito {
+                                                format!("{}#{} ({})",
+                                                        &player.name,
+                                                        &player.tag,
+                                                        formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                                )
+                                            } else {
+                                                format!("{} ({})",
+                                                        "Incognito", // FIXME: Temp change to agent name
+                                                        formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                                )
+                                            }
+                                        );
+                                    });
+                                });
+                            });
+                        });
+
+
+
+                    // History
+
+                    if let Some(selected_user) = &self.selected_user {
+                        if i == selected_user.to_owned() as usize {
+                            if !player.incognito {
+
+                                // Name History
+                                if player.name_history.len() > 0usize { // 1 to ignore current name
+                                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+                                    ui.label("Previous Usernames: ");
+
+                                    for name_history in &player.name_history {
+                                        ui.label(
+                                            format!("{}#{} ({})",
+                                                &name_history.name,
+                                                &name_history.tag,
+                                                formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone().unwrap()).max(0) as u64)),
+                                            )
+                                        );
+                                    }
+                                }
+                            }
+
+                            // Match History
+                            if player.match_history.len() > 0usize {
+                                ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
+                                //println!("{:?}", player.match_history);
+
+                                for log in player.match_history.iter().rev().take(150) {
+                                    println!("{:?}", log.agent_id);
+
+                                   let (mut agent_image, mut agent_name) = (String::new(), String::new());
+                                   let (mut map_image, mut map_name) = (String::new(), String::new());
+
+                                    if let Some(images) = &self.images {
+                                        let agent = images.agents.iter().find(|x| x.uuid == log.agent_id.to_lowercase() || x.name.to_lowercase() == log.agent_id.to_lowercase());
+
+                                        if let Some(agent) = agent {
+                                            agent_image = agent.icon.clone();
+                                            agent_name = agent.name.clone();
+                                        }
+
+                                        let map = images.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().trim().to_lowercase() || x.name.to_lowercase() == log.map_id.clone().to_lowercase().trim_matches('\"'));
+
+                                        if let Some(map) = map {
+                                            map_image = map.icon.clone();
+                                            map_name = map.name.clone();
+                                        }
+                                    }
+
+                                    let frame_color = if log.enemy.unwrap() { Color32::from_rgb(41, 31, 41) } else { Color32::from_rgb(31, 41, 41) };
+
+                                   egui::Frame::none()
+                                       .fill(frame_color)
+                                       .rounding(10.0)
+                                       .show(ui, |ui| {
+                                           ui.set_max_width(ui.available_width());
+                                           ui.set_max_height(80.0);
+
+                                           ui.horizontal(|ui| {
+                                               // Agent Icon
+                                               ui.add(
+                                                   egui::Image::new(agent_image)
+                                                       .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                       .maintain_aspect_ratio(false)
+                                                       .rounding(10.0)
+                                               );
+
+                                               // Data
+                                               ui.vertical(|ui| {
+                                                   ui.add_space(15.0);
+                                                   ui.colored_label(Color32::WHITE, map_name);
+
+                                                   if log.enemy.unwrap() {
+                                                       ui.colored_label(Color32::RED, "Enemy");
+                                                   }  else {
+                                                       ui.colored_label(Color32::GREEN, "Team");
+                                                   }
+
+                                                   ui.colored_label(Color32::WHITE, format!("{}", formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time).max(0) as u64))));
+                                               });
+
+                                               ui.add_space(ui.available_width() - 80.0);
+
+                                               // Map Icon
+                                               ui.add(
+                                                   egui::Image::new(map_image)
+                                                       .fit_to_exact_size(Vec2::new(80.0, 80.0))
+                                                       .maintain_aspect_ratio(false)
+                                                       .rounding(10.0)
+                                               );
+                                           });
+                                       });
+                                }
+                            }
+                        }
+                    }
+                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                }
+                ui.label("Made by: nedasv | Discord: 3eu");
+            });
+        }
+    }
+}
+
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.set_max_width(ui.available_width());
 
-            // ---- TOP MENU -----
+            // Nav Bar
+            ui.horizontal(|ui| {
+                if ui.button("Home").clicked() {
+                    self.page = Page::Home;
+                };
 
-            if self.state != State::WaitValorant || self.state != State::Load {
-                ui.horizontal(|ui| {
-                    if ui.button("Home").clicked() {
-                        self.state = State::Refresh;
+                if self.auth.is_none() {
+                    ui.add_enabled(false, egui::Button::new("Refresh"));
+                } else {
+                    if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
+                        self.settings.last_checked = 0;
+                        self.state = State::ButtonRefresh;
                     };
+                }
 
-                    if self.auth.is_none() {
-                        ui.add_enabled(false, egui::Button::new("Refresh"));
-                    } else {
-                        if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
-                            self.settings.last_checked = 0;
-                            self.state = State::ButtonRefresh;
-                        };
-                    }
+                if let Some(cur_match) = &self.current_match {
+                    ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
+                }
 
-                    if let Some(cur_match) = &self.current_match {
-                        ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
-                    }
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
-                        if ui.button("⚙").clicked() {
-                            self.state = State::Settings;
-                        };
-                    });
-
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
+                    if ui.button("⚙").clicked() {
+                        self.page = Page::Settings;
+                    };
                 });
 
-                // Padding
-                ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-            }
+            });
 
-            // ---- MAIN BODY ----
+            ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+
 
             match &self.state {
 
@@ -274,35 +485,6 @@ impl eframe::App for MyApp {
                     self.state = State::CheckPromise;
                 }
 
-                State::Settings => {
-                    ui.horizontal(|ui| {
-                        ui.label("Auto Refresh: ");
-                        ui.checkbox(&mut self.settings.auto_refresh, "");
-                    });
-
-                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-
-                    if ui.button("Import VRY data").clicked() {
-                        self.import_promise = Some(Promise::spawn_thread("import_data", || {
-                            if let Some(dir) = directories_next::ProjectDirs::from("", "", "vry") {
-                                let path = dir.clone().data_dir().parent().unwrap().join("stats.json");
-                                let new_path = path.as_path();
-
-                                println!("{:?}", new_path.as_os_str().to_string_lossy());
-
-                                let cv = converter::Converter::get_file(new_path.clone());
-                                let (success, fail, total) = converter::Converter::convert_vry_history(cv);
-
-                                return (success, fail, total)
-                            }
-
-                            return (0, 0, 0)
-                        }));
-
-                        self.state = State::CheckPromise;
-                    }
-                }
-
                 State::WaitValorant => {
                     if self.settings.can_wait() {
                         println!("passed");
@@ -310,6 +492,7 @@ impl eframe::App for MyApp {
                         // check for lockfile
 
                         if let Some(auth) = RiotAuth::load() {
+                            println!("got auth");
                             self.auth = Some(Arc::new(auth));
                             self.state = State::Load;
                         }
@@ -324,7 +507,6 @@ impl eframe::App for MyApp {
                 State::Refresh | State::ButtonRefresh => {
                     if (self.settings.can_refresh() && self.settings.auto_refresh) || self.state == State::ButtonRefresh {
                         self.state = State::Refresh; // In case state was on button refresh
-
 
                         match &self.promise {
                             Some(_) => {
@@ -341,7 +523,7 @@ impl eframe::App for MyApp {
                                     }
 
                                     self.promise = Some(Promise::spawn_thread("look_for_match", move || {
-                                       // TODO: Implement pre-game
+                                        // TODO: Implement pre-game
                                         let mut match_handler = MatchHandler::new();
 
                                         if let Ok(_) = match_handler.get_match_id(Arc::clone(&new_auth)) {
@@ -393,7 +575,7 @@ impl eframe::App for MyApp {
                         if let Some(promise) = promise.ready() {
                             match promise {
                                 Some(image_data) => {
-                                   self.images = Some(image_data.to_owned());
+                                    self.images = Some(image_data.to_owned());
                                 }
                                 None => {
                                     println!("promise returned None");
@@ -415,219 +597,43 @@ impl eframe::App for MyApp {
                 }
             }
 
-            if let Some(current_match) = &self.current_match {
-                let players = &current_match.players;
-
-                let formatter = timeago::Formatter::new();
-
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (i, player) in players.iter().filter(|x| x.times_played > 1).enumerate() {
-
-                        //println!("{:?}", player.agent_id);
-
-                        let res = ui.interact(egui::Rect::from_min_size(ui.next_widget_position(), Vec2::new(ui.available_width(), 80.0)), Id::new(format!("area_{}", i)), Sense::click());
-                        let mut frame_color = Color32::from_rgb(31, 31, 31);
-
-
-                        if res.hovered() {
-                            frame_color = Color32::from_rgb(41, 41, 41);
-                            ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
-                        } else {
-                            frame_color = Color32::from_rgb(31, 31, 31);
-                        }
-
-                        if res.clicked() {
-                            ui.scroll_to_rect(res.rect, Some(egui::Align::TOP));
-
-                            println!("clicked area: {:?}", i);
-                            if let Some(index) = self.selected_user {
-                                if i == index.to_owned() as usize {
-                                    // USER CLICKED ALREADY SELECTED
-                                    self.selected_user = None;
-                                }  else {
-                                    self.selected_user = Some(i as u8);
-                                }
-                            } else {
-                                self.selected_user = Some(i as u8);
-                            }
-                        }
-
-                        egui::Frame::none()
-                            .fill(frame_color)
-                            .rounding(10.0)
-                            .show(ui, |ui| {
-                                // Player Cards
-                                ui.horizontal(|ui| {
-                                    ui.set_max_width(ui.available_width());
-                                    ui.set_width(ui.available_width());
-                                    ui.set_max_height(80.0);
-
-                                    // Agent Icon
-                                    if let Some(images) = &self.images {
-                                        let agent_image = images.agents.iter().find(|x| x.uuid == player.agent_id.to_lowercase() || x.name == player.agent_id.to_lowercase());
-
-                                        if let Some(agent_image) = agent_image {
-                                            ui.add(
-                                                egui::Image::new(agent_image.icon.clone())
-                                                    .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                    .maintain_aspect_ratio(false)
-                                                    .rounding(10.0)
-                                            );
-                                        }
-                                    }
-
-                                    // TODO: Center widgets
-                                    ui.vertical_centered(|ui| {
-                                        //ui.add_space(20.0); // FIXME: Temp to center vertically
-
-                                        // Data
-                                        ui.horizontal_centered(|ui| {
-                                            ui.colored_label(
-                                                Color32::WHITE,
-                                                if !player.incognito {
-                                                    format!("{}#{} ({})",
-                                                            &player.name,
-                                                            &player.tag,
-                                                            formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
-                                                    )
-                                                } else {
-                                                    format!("{} ({})",
-                                                            "Incognito", // FIXME: Temp change to agent name
-                                                            formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
-                                                    )
-                                                }
-                                            );
-                                        });
-
-                                        // Button
-                                        // if player.match_history.len() > 0usize {
-                                        //     let button = ui.button("More Info");
-                                        //
-                                        //     if button.clicked() {
-                                        //         if let Some(index) = self.selected_user {
-                                        //             if i == index.to_owned() as usize {
-                                        //                 // USER CLICKED ALREADY SELECTED
-                                        //                 self.selected_user = None;
-                                        //             }  else {
-                                        //                 self.selected_user = Some(i as u8);
-                                        //             }
-                                        //         } else {
-                                        //             self.selected_user = Some(i as u8);
-                                        //         }
-                                        //     }
-                                        // }
-                                    });
-                                });
-                            });
-
-
-
-                        // History
-
-                        if let Some(selected_user) = &self.selected_user {
-                            if i == selected_user.to_owned() as usize {
-                                if !player.incognito {
-
-                                    // Name History
-                                    if player.name_history.len() > 0usize { // 1 to ignore current name
-                                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-
-                                        ui.label("Previous Usernames: ");
-
-                                        for name_history in &player.name_history {
-                                            ui.label(
-                                                format!("{}#{} ({})",
-                                                    &name_history.name,
-                                                    &name_history.tag,
-                                                    formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone().unwrap()).max(0) as u64)),
-                                                )
-                                            );
-                                        }
-                                    }
-                                }
-
-                                // Match History
-                                if player.match_history.len() > 0usize {
-                                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-
-                                    //println!("{:?}", player.match_history);
-
-                                    for log in player.match_history.iter().rev().take(150) {
-                                        println!("{:?}", log.agent_id);
-
-                                       let (mut agent_image, mut agent_name) = (String::new(), String::new());
-                                       let (mut map_image, mut map_name) = (String::new(), String::new());
-
-                                        if let Some(images) = &self.images {
-                                            let agent = images.agents.iter().find(|x| x.uuid == log.agent_id.to_lowercase() || x.name.to_lowercase() == log.agent_id.to_lowercase());
-
-                                            if let Some(agent) = agent {
-                                                agent_image = agent.icon.clone();
-                                                agent_name = agent.name.clone();
-                                            }
-
-                                            let map = images.maps.iter().find(|x| x.path.trim().to_lowercase() == log.map_id.clone().trim().to_lowercase() || x.name.to_lowercase() == log.map_id.clone().to_lowercase().trim_matches('\"'));
-
-                                            if let Some(map) = map {
-                                                map_image = map.icon.clone();
-                                                map_name = map.name.clone();
-                                            }
-                                        }
-
-                                        let frame_color = if log.enemy.unwrap() { Color32::from_rgb(41, 31, 41) } else { Color32::from_rgb(31, 41, 41) };
-
-                                       egui::Frame::none()
-                                           .fill(frame_color)
-                                           .rounding(10.0)
-                                           .show(ui, |ui| {
-                                               ui.set_max_width(ui.available_width());
-                                               ui.set_max_height(80.0);
-
-                                               ui.horizontal(|ui| {
-                                                   // Agent Icon
-                                                   ui.add(
-                                                       egui::Image::new(agent_image)
-                                                           .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                           .maintain_aspect_ratio(false)
-                                                           .rounding(10.0)
-                                                   );
-
-                                                   // Data
-                                                   ui.vertical(|ui| {
-                                                       ui.add_space(15.0);
-                                                       ui.colored_label(Color32::WHITE, map_name);
-
-                                                       if log.enemy.unwrap() {
-                                                           ui.colored_label(Color32::RED, "Enemy");
-                                                       }  else {
-                                                           ui.colored_label(Color32::GREEN, "Team");
-                                                       }
-
-                                                       ui.colored_label(Color32::WHITE, format!("{}", formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - log.match_time).max(0) as u64))));
-                                                   });
-
-                                                   ui.add_space(ui.available_width() - 80.0);
-
-                                                   // Map Icon
-                                                   ui.add(
-                                                       egui::Image::new(map_image)
-                                                           .fit_to_exact_size(Vec2::new(80.0, 80.0))
-                                                           .maintain_aspect_ratio(false)
-                                                           .rounding(10.0)
-                                                   );
-                                               });
-                                           });
-                                    }
-
-
-                                }
-                            }
-                        }
-                        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-                    }
-                    ui.label("Made by: nedasv | Discord: 3eu");
-                });
+            match &self.page {
+                Page::Settings => self.settings_page(ui),
+                Page::Home => self.home_page(ctx, ui),
             }
+
+            // // ---- TOP MENU -----
+
+            // if self.state != State::WaitValorant || self.state != State::Load {
+            //     ui.horizontal(|ui| {
+            //         if ui.button("Home").clicked() {
+            //             self.state = State::Refresh;
+            //         };
+            //
+            //         if self.auth.is_none() {
+            //             ui.add_enabled(false, egui::Button::new("Refresh"));
+            //         } else {
+            //             if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
+            //                 self.settings.last_checked = 0;
+            //                 self.state = State::ButtonRefresh;
+            //             };
+            //         }
+            //
+            //         if let Some(cur_match) = &self.current_match {
+            //             ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
+            //         }
+            //
+            //         ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
+            //             if ui.button("⚙").clicked() {
+            //                 self.state = State::Settings;
+            //             };
+            //         });
+            //
+            //     });
+            //
+            //     // Padding
+            //     ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+            // }
         });
     }
 
