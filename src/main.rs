@@ -243,7 +243,7 @@ impl MyApp {
             let formatter = timeago::Formatter::new();
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (i, player) in players.iter().filter(|x| x.times_played > 1).enumerate() {
+                for (i, player) in players.iter().filter(|x| x.times_played > 2).enumerate() {
 
                     //println!("{:?}", player.agent_id);
 
