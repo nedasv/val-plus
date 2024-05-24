@@ -498,7 +498,13 @@ impl eframe::App for MyApp {
                         }
                     } else {
 
-                        ui.label("Waiting for valorant");
+                        ui.add_space(ui.available_height() / 2.0 - 20.);
+
+                        ui.horizontal(|ui| {
+                            ui.add_space((ui.available_width() / 2.0) - 65.);
+                            egui_twemoji::EmojiLabel::new("Looking for Valorant 👀").show(ui);
+                        });
+
 
                         // do something while not?
                     }

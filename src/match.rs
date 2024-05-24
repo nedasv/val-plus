@@ -123,7 +123,9 @@ impl MatchHandler {
                                 return Err(())
                             }
 
-                            println!("{:?}", json);
+                            println!("passed match check");
+
+                            //println!("{:?}", json);
 
                             self.map_path = json.map_id.clone();
                             self.game_mode = json.gamemode_id.clone();
