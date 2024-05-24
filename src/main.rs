@@ -429,6 +429,13 @@ impl MyApp {
                 }
                 ui.label("Made by: nedasv | Discord: 3eu");
             });
+        } else {
+            ui.add_space(ui.available_height() / 2.0 - 20.);
+
+            ui.horizontal(|ui| {
+                ui.add_space((ui.available_width() / 2.0) - 65.);
+                egui_twemoji::EmojiLabel::new("Waiting for a match 👀").show(ui);
+            });
         }
     }
 }
@@ -453,7 +460,7 @@ impl eframe::App for MyApp {
                 }
 
                 if let Some(cur_match) = &self.current_match {
-                    ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
+                    egui_twemoji::EmojiLabel::new(format!("🌏 {}", cur_match.server.clone().to_uppercase())).show(ui);
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
@@ -487,26 +494,20 @@ impl eframe::App for MyApp {
 
                 State::WaitValorant => {
                     if self.settings.can_wait() {
-                        println!("passed");
-
-                        // check for lockfile
+                        println!("Checking for Valorant");
 
                         if let Some(auth) = RiotAuth::load() {
-                            println!("got auth");
+                            println!("RiotAuth exists");
                             self.auth = Some(Arc::new(auth));
                             self.state = State::Load;
                         }
                     } else {
-
                         ui.add_space(ui.available_height() / 2.0 - 20.);
 
                         ui.horizontal(|ui| {
                             ui.add_space((ui.available_width() / 2.0) - 65.);
                             egui_twemoji::EmojiLabel::new("Looking for Valorant 👀").show(ui);
                         });
-
-
-                        // do something while not?
                     }
                 }
 
@@ -514,11 +515,17 @@ impl eframe::App for MyApp {
                     if (self.settings.can_refresh() && self.settings.auto_refresh) || self.state == State::ButtonRefresh {
                         self.state = State::Refresh; // In case state was on button refresh
 
+                        println!("Could refresh");
+
                         match &self.promise {
                             Some(_) => {
+                                println!("Found promise");
+
                                 self.state = State::CheckPromise;
                             }
                             _ => {
+                                println!("Creating promise");
+
                                 if let Some(auth) = &self.auth {
                                     // Cloned data to pass into promise
                                     let new_auth = Arc::clone(auth);
@@ -590,6 +597,8 @@ impl eframe::App for MyApp {
                                     self.promise = None;
                                 }
                             }
+
+                            self.state = State::Refresh;
 
                         } else {
                             self.state = State::CheckPromise;
