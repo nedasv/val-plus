@@ -302,6 +302,8 @@ impl MyApp {
                                 ui.vertical_centered(|ui| {
                                     //ui.add_space(20.0); // FIXME: Temp to center vertically
 
+                                    let time_since = (self.settings.time_now() as i64 - player.last_played).max(0) as u64;
+
                                     // Data
                                     ui.horizontal_centered(|ui| {
                                         ui.colored_label(
@@ -310,7 +312,7 @@ impl MyApp {
                                                 format!("{}#{} ({})",
                                                         &player.name,
                                                         &player.tag,
-                                                        formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
+                                                        formatter.convert(time::Duration::from_secs(time_since))
                                                 )
                                             } else {
                                                 format!("{} ({})",
@@ -318,7 +320,7 @@ impl MyApp {
                                                         formatter.convert(time::Duration::from_secs((self.settings.time_now() as i64 - player.last_played).max(0) as u64))
                                                 )
                                             }
-                                        );
+                                        ).on_hover_text(format!("{} days", time_since / 86400));
                                     });
                                 });
                             });
@@ -356,7 +358,7 @@ impl MyApp {
 
                                 //println!("{:?}", player.match_history);
 
-                                for log in player.match_history.iter().rev().take(150) {
+                                for log in player.match_history.iter().rev().take(10) {
                                     println!("{:?}", log.agent_id);
 
                                    let (mut agent_image, mut agent_name) = (String::new(), String::new());
