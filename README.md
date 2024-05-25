@@ -15,7 +15,7 @@ Simply just tracks players you've played against, and shows when, what map, and 
 - Map and gamemode
 - Previous usernames (if streamer mode disabled)
 
-![App Screenshot](https://snipboard.io/SsJiKu.jpg)
+![App Screenshot]([https://snipboard.io/SsJiKu.jpg](https://snipboard.io/kH4Nuj.jpg))
 
 ## DISCLAIMER
 
