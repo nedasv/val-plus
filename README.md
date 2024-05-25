@@ -14,6 +14,7 @@ Simply just tracks players you've played against, and shows when, what map, and 
 - Last time you played with the user
 - Map and gamemode
 - Previous usernames (if streamer mode disabled)
+- Import match data from VRY
 
 ![App Screenshot](https://snipboard.io/kH4Nuj.jpg)
 
