@@ -9,7 +9,7 @@ use crate::loader::Loader;
 use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use eframe::{CreationContext, egui, Storage};
-use eframe::egui::{Color32, Id, Pos2, Sense, Ui, Vec2};
+use eframe::egui::{Color32, Id, Layout, Pos2, Sense, Ui, Vec2};
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
@@ -332,31 +332,67 @@ impl MyApp {
 
                     if let Some(selected_user) = &self.selected_user {
                         if i == selected_user.to_owned() as usize {
-                            if !player.incognito {
 
-                                // Name History
-                                if player.name_history.len() > 0usize { // 1 to ignore current name
-                                    ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-
-                                    ui.label("Previous Usernames: ");
-
-                                    for name_history in &player.name_history {
-                                        ui.label(
-                                            format!("{}#{} ({})",
-                                                &name_history.name,
-                                                &name_history.tag,
-                                                formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone().unwrap()).max(0) as u64)),
-                                            )
-                                        );
-                                    }
-                                }
-                            }
 
                             // Match History
                             if player.match_history.len() > 0usize {
                                 ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
-                                //println!("{:?}", player.match_history);
+                                egui::Frame::none()
+                                    .fill(Color32::from_rgb(41, 41, 41))
+                                    .rounding(10.0)
+                                    .show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.set_height(50.0);
+
+                                        ui.vertical(|ui| {
+                                            ui.add_space(5.0);
+
+                                            if !player.incognito {
+                                                // Name History
+
+                                                if player.name_history.len() > 0usize { // 1 to ignore current name
+
+                                                    ui.horizontal(|ui| {
+                                                        ui.add_space(10.0);
+                                                        ui.label(egui::RichText::new("Old Usernames:").strong());
+                                                    });
+
+                                                    for name_history in &player.name_history {
+
+                                                        ui.horizontal(|ui| {
+                                                            ui.add_space(10.0);
+                                                            ui.label(
+                                                                format!("{}#{} ({})",
+                                                                        &name_history.name,
+                                                                        &name_history.tag,
+                                                                        formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - name_history.name_time.clone().unwrap()).max(0) as u64)),
+                                                                )
+                                                            );
+                                                        });
+                                                    }
+                                                }
+
+                                                ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
+                                            }
+
+                                            ui.horizontal(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.label(egui::RichText::new("First Played:").strong());
+                                                ui.label(format!("{}", formatter.convert(Duration::from_secs((self.settings.time_now() as i64 - player.match_history.first().unwrap().match_time).max(0) as u64))))
+                                            });
+
+                                            ui.horizontal(|ui| {
+                                                ui.add_space(10.0);
+                                                ui.label(egui::RichText::new("Played:").strong());
+                                                ui.label(format!("{} times", player.match_history.len()))
+                                            });
+
+                                            ui.add_space(5.0);
+                                        });
+                                    });
+
+                                ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
 
                                 for log in player.match_history.iter().rev().take(10) {
                                     println!("{:?}", log.agent_id);
