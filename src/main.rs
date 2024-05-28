@@ -66,7 +66,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
         let status = self_update::backends::github::Update::configure()
             .repo_owner("nedasv")
             .repo_name("val-plus")
-            .bin_name("valorant-tracker")
+            .bin_name("valorant-tracker.exe")
             .show_download_progress(true)
             .current_version(cargo_crate_version!())
             .build()?
