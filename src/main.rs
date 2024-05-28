@@ -42,14 +42,47 @@ struct LoadedPlayer {
     agent_id: String,
     incognito: bool,
 }
-//
+
 #[derive(Debug, Clone)]
 enum TeamType {
     Ally,
     Enemy
 }
-//
+
+#[macro_use]
+extern crate self_update;
+
+fn run() -> Result<(), Box<dyn ::std::error::Error>> {
+    let target = self_update::get_target();
+    let releases = self_update::backends::github::ReleaseList::configure()
+        .repo_owner("nedasv")
+        .repo_name("val-plus")
+        .with_target(&target)
+        .build()?
+        .fetch()?;
+
+    if let Some(release) = releases.get(0) {
+        let version = &release.version;
+        let status = self_update::backends::github::Update::configure()
+            .repo_owner("nedasv")
+            .repo_name("val-plus")
+            .target(&target)
+            .bin_name("valorant-tracker")
+            .show_download_progress(true)
+            .current_version(cargo_crate_version!())
+            .build()?
+            .update()?;
+        println!("Update status: `{}`!", status.version());
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<(), eframe::Error> {
+    if let Err(e) = run() {
+        eprintln!("Failed to update the application: {}", e);
+    }
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
