@@ -53,9 +53,11 @@ enum TeamType {
 extern crate self_update;
 
 fn run() -> Result<(), Box<dyn ::std::error::Error>> {
+    let target = self_update::get_target();
     let releases = self_update::backends::github::ReleaseList::configure()
         .repo_owner("nedasv")
         .repo_name("val-plus")
+        .with_target(&target)
         .build()?
         .fetch()?;
 
@@ -66,7 +68,8 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
         let status = self_update::backends::github::Update::configure()
             .repo_owner("nedasv")
             .repo_name("val-plus")
-            .bin_name("valorant-tracker.exe")
+            .target(&target)
+            .bin_name("valorant-tracker")
             .show_download_progress(true)
             .current_version(cargo_crate_version!())
             .build()?
