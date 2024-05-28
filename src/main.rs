@@ -468,12 +468,14 @@ impl MyApp {
                 ui.label("Made by: nedasv | Discord: 3eu");
             });
         } else {
-            ui.add_space(ui.available_height() / 2.0 - 20.);
+            if let Some(_) = &self.auth {
+                ui.add_space(ui.available_height() / 2.0 - 20.);
 
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() / 2.0) - 65.);
-                egui_twemoji::EmojiLabel::new("Waiting for a match 👀").show(ui);
-            });
+                ui.horizontal(|ui| {
+                    ui.add_space((ui.available_width() / 2.0) - 65.);
+                    egui_twemoji::EmojiLabel::new("Waiting for a match 👀").show(ui);
+                });
+            }
         }
     }
 }
@@ -585,6 +587,8 @@ impl eframe::App for MyApp {
 
                                         None
                                     }));
+
+                                    self.settings.last_checked = 0;
 
                                     self.state = State::CheckPromise;
                                 }

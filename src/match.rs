@@ -26,12 +26,6 @@ pub struct CurrentGameMatch {
     pub players: Vec<Player>,
 }
 
-// #[derive(serde::Deserialize, Debug, Default)]
-// pub struct ConnectionDetails {
-//     #[serde(rename = "GameServerHosts")]
-//     pub servers: Vec<String>,
-//}
-
 #[derive(serde::Deserialize, Debug, Default)]
 pub struct Player {
     #[serde(rename = "TeamID")]
@@ -69,6 +63,10 @@ pub struct MatchHandler {
     pub players: Vec<LoadedPlayer>,
 }
 
+pub enum MatchError {
+    MatchNotFound, Other
+}
+
 impl MatchHandler {
     pub fn new() -> Self {
         Self {
@@ -80,7 +78,7 @@ impl MatchHandler {
         }
     }
 
-    pub fn get_match_id(&mut self, auth: Arc<RiotAuth>) -> Result<(), ()> {
+    pub fn get_match_id(&mut self, auth: Arc<RiotAuth>) -> Result<(), MatchError> {
         return match self.client.get(format!("https://glz-{}-1.{}.a.pvp.net/core-game/v1/players/{}", auth.region, auth.shard, auth.puuid))
             .bearer_auth(&auth.access_token)
             .header("X-Riot-Entitlements-JWT", &auth.token)
@@ -89,19 +87,25 @@ impl MatchHandler {
             .send()
         {
             Ok(res) => {
+
+                println!("Match id stats: {:?}", res.status());
+
                 if res.status().is_success() {
                     match res.json::<CurrentGamePlayer>() {
                         Ok(json) => {
                             self.match_id = json.match_id.clone();
                             Ok(())
                         },
-                        Err(_) => Err(()),
+                        Err(_) => Err(MatchError::Other),
                     }
                 } else {
-                    Err(())
+
+                    // stop display users, show waiting for match
+
+                    Err(MatchError::MatchNotFound)
                 }
             },
-            Err(_) => Err(()),
+            Err(_) => Err(MatchError::Other),
         }
     }
 
@@ -114,6 +118,9 @@ impl MatchHandler {
             .send()
         {
             Ok(res) => {
+
+                println!("Current game match status: {}", res.status());
+
                 if res.status().is_success() {
                     match res.json::<CurrentGameMatch>() {
                         Ok(json) => {
@@ -221,7 +228,10 @@ impl MatchHandler {
                     Err(())
                 }
             },
-            Err(_) => Err(()),
+            Err(err) => {
+                println!("Here {:?}", err);
+                Err(())
+            },
         }
     }
 }
