@@ -35,21 +35,21 @@ pub struct Authorization {
 
 #[derive(Debug)]
 pub enum LoaderError {
-    Auth, PortPassword, RegionShard, ClientVersion, PlayerInfo
+    Auth, PortPassword, RegionShard, ClientVersion, PlayerInfo, NotLoaded
 }
 
 #[derive(Debug, Default)]
 pub struct Loader {
     client: Client,
 
-    port: String,
-    password: String,
-    region: String,
-    shard: String,
-    access_token: String,
-    token: String,
-    client_version: String,
-    puuid: String,
+    pub port: String,
+    pub password: String,
+    pub region: String,
+    pub shard: String,
+    pub access_token: String,
+    pub token: String,
+    pub client_version: String,
+    pub puuid: String,
 }
 
 impl Loader {

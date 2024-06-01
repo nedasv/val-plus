@@ -2,8 +2,7 @@
 
 use std::cmp::PartialEq;
 use std::sync::Arc;
-use crate::auth::get_auth;
-use crate::loader::Loader;
+use crate::loader::{Loader, LoaderError};
 
 use std::time;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,7 +20,6 @@ pub mod display {
 }
 
 mod loader;
-mod auth;
 mod pre_game;
 mod r#match;
 mod name_service;
@@ -96,7 +94,7 @@ fn main() -> Result<(), eframe::Error> {
             .with_min_inner_size([350.0, 350.0])
             .with_resizable(true)
             .with_maximize_button(false),
-        persist_window: false,
+        // persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
@@ -119,7 +117,7 @@ fn main() -> Result<(), eframe::Error> {
 
 #[derive(Default)]
 struct MyApp {
-    auth: Option<Arc<RiotAuth>>,
+    auth: Option<Arc<Loader>>,
 
     state: State,
     page: Page,
@@ -151,17 +149,17 @@ enum Page {
     Home,
     Settings,
 }
-#[derive(Debug, Clone)]
-struct RiotAuth {
-    access_token: String,
-    client_ver: String,
-    puuid: String,
-    port: String,
-    password: String,
-    region: String,
-    shard: String,
-    token: String,
-}
+// #[derive(Debug, Clone)]
+// struct RiotAuth {
+//     access_token: String,
+//     client_ver: String,
+//     puuid: String,
+//     port: String,
+//     password: String,
+//     region: String,
+//     shard: String,
+//     token: String,
+//}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -220,35 +218,16 @@ impl Settings {
     }
 }
 
-impl RiotAuth {
-    fn load() -> Option<Self> {
-        let mut loader = Loader::new();
-
-        println!("Try Load: {:?}", loader.try_load());
-
-        println!("Loader: {:?}", loader);
-
-
-        // if let Some((port, password)) = loader.get_port_and_password() {
-        //     if let Some((token, access_token)) = get_auth(port.clone(), password.clone()) {
-        //         if let Some((region, shard)) = loader.get_region_and_shard() {
-        //             return Some(Self {
-        //                 access_token: access_token.clone(),
-        //                 client_ver: loader.get_client_version(port.clone(), password.clone()).unwrap(),
-        //                 puuid: loader.get_player_info(access_token.clone()).unwrap(),
-        //                 port,
-        //                 password,
-        //                 region,
-        //                 shard,
-        //                 token: token.clone(),
-        //             })
-        //         }
-        //     }
-        // }
-
-        return None
-    }
-}
+// impl RiotAuth {
+//     fn load() -> Result<Self, LoaderError> {
+//         let mut loader = Loader::new();
+//
+//         println!("Try Load: {:?}", loader.try_load());
+//         println!("Loader: {:?}", loader);
+//
+//         return Err(LoaderError::NotLoaded)
+//     }
+// }
 
 impl MyApp {
     fn settings_page(&mut self, ui: &mut Ui) {
@@ -579,11 +558,16 @@ impl eframe::App for MyApp {
                 State::WaitValorant => {
                     if self.settings.can_wait() {
                         println!("Checking for Valorant");
+                        let mut loader = Loader::new();
 
-                        if let Some(auth) = RiotAuth::load() {
-                            println!("RiotAuth exists");
-                            self.auth = Some(Arc::new(auth));
-                            self.state = State::Load;
+                        match loader.try_load() {
+                            Ok(_) => {
+                                println!("RiotAuth exists");
+                                self.auth = Some(Arc::new(loader));
+                                self.state = State::Load;
+                            }
+                            // Display error msgs or something if not loading
+                            _ => {}
                         }
                     } else {
                         ui.add_space(ui.available_height() / 2.0 - 20.);

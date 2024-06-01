@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use crate::RiotAuth;
+use crate::loader::Loader;
 
 #[derive(Deserialize, Debug)]
 pub struct NameService {
@@ -12,7 +12,7 @@ pub struct NameService {
 }
 
 impl NameService {
-    pub fn get_names(auth: &RiotAuth, users: Vec<String>) -> Option<Vec<NameService>> {
+    pub fn get_names(auth: &Loader, users: Vec<String>) -> Option<Vec<NameService>> {
         let client = match reqwest::blocking::Client::builder()
             .danger_accept_invalid_certs(true)
             .build() {
@@ -24,7 +24,7 @@ impl NameService {
             .bearer_auth(&auth.access_token)
             .header("X-Riot-Entitlements-JWT", &auth.token)
             .header("X-Riot-ClientPlatform", "ew0KCSJwbGF0Zm9ybVR5cGUiOiAiUEMiLA0KCSJwbGF0Zm9ybU9TIjogIldpbmRvd3MiLA0KCSJwbGF0Zm9ybU9TVmVyc2lvbiI6ICIxMC4wLjE5MDQyLjEuMjU2LjY0Yml0IiwNCgkicGxhdGZvcm1DaGlwc2V0IjogIlVua25vd24iDQp9")
-            .header("X-Riot-ClientVersion", &auth.client_ver)
+            .header("X-Riot-ClientVersion", &auth.client_version)
             .body(serde_json::to_string(&users).unwrap())
             .send()
         {

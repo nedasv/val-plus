@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
-use crate::{RiotAuth, LoadedPlayer, name_service, TeamType};
+use crate::{LoadedPlayer, name_service, TeamType};
 use crate::database;
 use crate::database::{MatchHistory, NameHistory};
+use crate::loader::Loader;
+
 #[derive(serde::Deserialize, Debug, Default)]
 pub struct CurrentGamePlayer {
     #[serde(rename = "MatchID")]
@@ -78,12 +80,12 @@ impl MatchHandler {
         }
     }
 
-    pub fn get_match_id(&mut self, auth: Arc<RiotAuth>) -> Result<(), MatchError> {
+    pub fn get_match_id(&mut self, auth: Arc<Loader>) -> Result<(), MatchError> {
         return match self.client.get(format!("https://glz-{}-1.{}.a.pvp.net/core-game/v1/players/{}", auth.region, auth.shard, auth.puuid))
             .bearer_auth(&auth.access_token)
             .header("X-Riot-Entitlements-JWT", &auth.token)
             .header("X-Riot-ClientPlatform", "ew0KCSJwbGF0Zm9ybVR5cGUiOiAiUEMiLA0KCSJwbGF0Zm9ybU9TIjogIldpbmRvd3MiLA0KCSJwbGF0Zm9ybU9TVmVyc2lvbiI6ICIxMC4wLjE5MDQyLjEuMjU2LjY0Yml0IiwNCgkicGxhdGZvcm1DaGlwc2V0IjogIlVua25vd24iDQp9")
-            .header("X-Riot-ClientVersion", &auth.client_ver)
+            .header("X-Riot-ClientVersion", &auth.client_version)
             .send()
         {
             Ok(res) => {
@@ -109,12 +111,12 @@ impl MatchHandler {
         }
     }
 
-    pub fn get_match_details(&mut self, auth: Arc<RiotAuth>, latest_match_id: String) -> Result<(), ()> {
+    pub fn get_match_details(&mut self, auth: Arc<Loader>, latest_match_id: String) -> Result<(), ()> {
         return match self.client.get(format!("https://glz-{}-1.{}.a.pvp.net/core-game/v1/matches/{}", auth.region, auth.shard, self.match_id))
             .bearer_auth(&auth.access_token)
             .header("X-Riot-Entitlements-JWT", &auth.token)
             .header("X-Riot-ClientPlatform", "ew0KCSJwbGF0Zm9ybVR5cGUiOiAiUEMiLA0KCSJwbGF0Zm9ybU9TIjogIldpbmRvd3MiLA0KCSJwbGF0Zm9ybU9TVmVyc2lvbiI6ICIxMC4wLjE5MDQyLjEuMjU2LjY0Yml0IiwNCgkicGxhdGZvcm1DaGlwc2V0IjogIlVua25vd24iDQp9")
-            .header("X-Riot-ClientVersion", &auth.client_ver)
+            .header("X-Riot-ClientVersion", &auth.client_version)
             .send()
         {
             Ok(res) => {
