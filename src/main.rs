@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::cmp::PartialEq;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::auth::get_auth;
 use crate::loader::Loader;
@@ -15,6 +14,11 @@ use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
 use crate::images::ImageData;
 use crate::r#match::MatchHandler;
+
+pub mod display {
+    mod home;
+    mod settings;
+}
 
 mod loader;
 mod auth;
@@ -92,7 +96,7 @@ fn main() -> Result<(), eframe::Error> {
             .with_min_inner_size([350.0, 350.0])
             .with_resizable(true)
             .with_maximize_button(false),
-        persist_window: true,
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
@@ -218,24 +222,29 @@ impl Settings {
 
 impl RiotAuth {
     fn load() -> Option<Self> {
-        let loader = Loader::new();
+        let mut loader = Loader::new();
 
-        if let Some((port, password)) = loader.get_port_and_password() {
-            if let Some((token, access_token)) = get_auth(port.clone(), password.clone()) {
-                if let Some((region, shard)) = loader.get_region_and_shard() {
-                    return Some(Self {
-                        access_token: access_token.clone(),
-                        client_ver: loader.get_client_version(port.clone(), password.clone()).unwrap(),
-                        puuid: loader.get_player_info(access_token.clone()).unwrap(),
-                        port,
-                        password,
-                        region,
-                        shard,
-                        token: token.clone(),
-                    })
-                }
-            }
-        }
+        println!("Try Load: {:?}", loader.try_load());
+
+        println!("Loader: {:?}", loader);
+
+
+        // if let Some((port, password)) = loader.get_port_and_password() {
+        //     if let Some((token, access_token)) = get_auth(port.clone(), password.clone()) {
+        //         if let Some((region, shard)) = loader.get_region_and_shard() {
+        //             return Some(Self {
+        //                 access_token: access_token.clone(),
+        //                 client_ver: loader.get_client_version(port.clone(), password.clone()).unwrap(),
+        //                 puuid: loader.get_player_info(access_token.clone()).unwrap(),
+        //                 port,
+        //                 password,
+        //                 region,
+        //                 shard,
+        //                 token: token.clone(),
+        //             })
+        //         }
+        //     }
+        // }
 
         return None
     }

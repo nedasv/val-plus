@@ -25,8 +25,31 @@ pub struct ValClient {
     pub version: String,
 }
 
+#[derive(Debug, Default, serde::Deserialize)]
+pub struct Authorization {
+    #[serde(rename = "accessToken")]
+    pub access_token: String,
+    #[serde(rename = "token")]
+    pub token: String,
+}
+
+#[derive(Debug)]
+pub enum LoaderError {
+    Auth, PortPassword, RegionShard, ClientVersion, PlayerInfo
+}
+
+#[derive(Debug, Default)]
 pub struct Loader {
     client: Client,
+
+    port: String,
+    password: String,
+    region: String,
+    shard: String,
+    access_token: String,
+    token: String,
+    client_version: String,
+    puuid: String,
 }
 
 impl Loader {
@@ -35,28 +58,65 @@ impl Loader {
             client: Client::builder()
                 .danger_accept_invalid_certs(true)
                 .build()
-                .unwrap()
+                .unwrap(),
+            ..Default::default()
         }
     }
 
-    pub fn get_port_and_password(&self) -> Option<(String, String)> {
+    pub fn try_load(&mut self) -> Result<(), LoaderError> {
+        self.get_port_and_password()?;
+        self.get_auth()?;
+        self.get_region_and_shard()?;
+        self.get_client_version()?;
+        self.get_player_info()?;
+
+        Ok(())
+    }
+
+    pub fn get_auth(&mut self) -> Result<(), LoaderError> {
+        match self.client.get(format!("https://127.0.0.1:{}/entitlements/v1/token", self.port)).basic_auth("riot", Some(&self.password)).send() {
+            Ok(res) => {
+                if res.status().is_success() {
+                    match res.json::<Authorization>() {
+                        Ok(auth) => {
+                            self.token = auth.token.clone();
+                            self.access_token = auth.access_token.clone();
+
+                            return Ok(())
+                        }
+                        _ => {},
+                    }
+                }
+            }
+            _ => {},
+        }
+
+        Err(LoaderError::Auth)
+    }
+
+    pub fn get_port_and_password(&mut self) -> Result<(), LoaderError> {
         match std::env::var("LOCALAPPDATA") {
             Ok(path) => {
                 match std::fs::read_to_string(format!("{}{}", path, "\\Riot Games\\Riot Client\\Config\\lockfile")) {
                     Ok(lockfile) => {
                         let lock_split: Vec<&str> = lockfile.split(":").collect();
 
-                        Some((lock_split.get(2).unwrap().to_string(), lock_split.get(3).unwrap().to_string()))
+                        self.port = lock_split.get(2).unwrap().to_string();
+                        self.password = lock_split.get(3).unwrap().to_string();
+
+                        return Ok(())
 
                     }
-                    Err(_) => return None,
+                    _ => {}
                 }
             }
-            Err(_) => return None,
+            _ => {}
         }
+
+        Err(LoaderError::PortPassword)
     }
 
-    pub fn get_region_and_shard(&self) -> Option<(String, String)> {
+    pub fn get_region_and_shard(&mut self) -> Result<(), LoaderError> {
         match std::env::var("LOCALAPPDATA") {
             Ok(path) => {
                 match std::fs::read_to_string(format!("{}{}", path, "\\VALORANT\\Saved\\Logs\\ShooterGame.log")) {
@@ -66,41 +126,57 @@ impl Loader {
                         if let Some(capture) = re.captures(&shooter_game) {
                             if let (Some(region), Some(shard)) =
                                 (capture.get(1), capture.get(2)) {
-                                return Some((region.as_str().to_string(), shard.as_str().to_string()))
+
+                                self.region = region.as_str().to_string();
+                                self.shard = shard.as_str().to_string();
+
+                                return Ok(())
                             }
                         }
 
                     }
-                    Err(_) => return None,
+                    _ => {}
                 }
             }
-            Err(_) => return None,
+            _ => {}
         }
 
-        return None
+        Err(LoaderError::RegionShard)
     }
 
-    pub fn get_client_version(&self, port: String, password: String) -> Option<String> {
-        return match self.client.get(format!("https://127.0.0.1:{}/product-session/v1/external-sessions", &port)).basic_auth("riot", Some(&password)).send() {
+    pub fn get_client_version(&mut self) -> Result<(), LoaderError> {
+        match self.client.get(format!("https://127.0.0.1:{}/product-session/v1/external-sessions", &self.port)).basic_auth("riot", Some(&self.password)).send() {
             Ok(res) => {
                 match res.json::<HostApp>() {
-                    Ok(json) => Some(json.host_app.version),
-                    Err(_) => None,
+                    Ok(json) => {
+                        self.client_version = json.host_app.version;
+
+                        return Ok(())
+                    }
+                    _ => {}
                 }
             }
-            Err(_) => None,
+            _ => {}
         }
+
+        Err(LoaderError::ClientVersion)
     }
 
-    pub fn get_player_info(&self, access_token: String) -> Option<String> {
-        return match self.client.get("https://auth.riotgames.com/userinfo").bearer_auth(&access_token).send() {
+    pub fn get_player_info(&mut self) -> Result<(), LoaderError> {
+        match self.client.get("https://auth.riotgames.com/userinfo").bearer_auth(&self.access_token).send() {
             Ok(res) => {
                 match res.json::<UserId>() {
-                    Ok(json) => Some(json.puuid),
-                    Err(_) => None,
+                    Ok(json) => {
+                        self.puuid = json.puuid;
+
+                        return Ok(())
+                    }
+                    _ => {}
                 }
             }
-            Err(_) => None
+            _ => {}
         }
+
+        Err(LoaderError::PlayerInfo)
     }
 }
