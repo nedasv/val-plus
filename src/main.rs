@@ -603,49 +603,6 @@ impl eframe::App for MyApp {
                 Page::Settings => show_settings(self, ui),
                 Page::Home => self.home_page(ctx, ui),
             }
-
-            // // ---- TOP MENU -----
-
-            // if self.state != State::WaitValorant || self.state != State::Load {
-            //     ui.horizontal(|ui| {
-            //         if ui.button("Home").clicked() {
-            //             self.state = State::Refresh;
-            //         };
-            //
-            //         if self.auth.is_none() {
-            //             ui.add_enabled(false, egui::Button::new("Refresh"));
-            //         } else {
-            //             if ui.button(format!("Refresh (Auto: {})", if self.settings.auto_refresh { self.settings.get_refresh_time() } else { 999 })).clicked {
-            //                 self.settings.last_checked = 0;
-            //                 self.state = State::ButtonRefresh;
-            //             };
-            //         }
-            //
-            //         if let Some(cur_match) = &self.current_match {
-            //             ui.label(format!("🌏 {}", cur_match.server.clone().to_uppercase()));
-            //         }
-            //
-            //         ui.with_layout(egui::Layout::right_to_left(egui::Align::Max),|ui| {
-            //             if ui.button("⚙").clicked() {
-            //                 self.state = State::Settings;
-            //             };
-            //         });
-            //
-            //     });
-            //
-            //     // Padding
-            //     ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-            // }
         });
     }
-
-    // fn save(&mut self, storage: &mut dyn Storage) {
-    //     if let Ok(settings) = serde_json::to_string(&self.settings) {
-    //         storage.set_string("settings", settings);
-    //     }
-    // }
-    //
-    // fn auto_save_interval(&self) -> Duration {
-    //     Duration::from_secs(10)
-    // }
 }
