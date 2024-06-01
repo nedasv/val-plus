@@ -72,7 +72,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
             .repo_name("val-plus")
             .target(&target)
             .bin_name("valorant-tracker")
-            .show_download_progress(true)
+            .show_download_progress(false)
             .current_version(cargo_crate_version!())
             .build()?
             .update()?;
@@ -149,17 +149,6 @@ enum Page {
     Home,
     Settings,
 }
-// #[derive(Debug, Clone)]
-// struct RiotAuth {
-//     access_token: String,
-//     client_ver: String,
-//     puuid: String,
-//     port: String,
-//     password: String,
-//     region: String,
-//     shard: String,
-//     token: String,
-//}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -218,17 +207,6 @@ impl Settings {
     }
 }
 
-// impl RiotAuth {
-//     fn load() -> Result<Self, LoaderError> {
-//         let mut loader = Loader::new();
-//
-//         println!("Try Load: {:?}", loader.try_load());
-//         println!("Loader: {:?}", loader);
-//
-//         return Err(LoaderError::NotLoaded)
-//     }
-// }
-
 impl MyApp {
     fn settings_page(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
@@ -257,6 +235,18 @@ impl MyApp {
 
             self.state = State::CheckPromise;
         }
+
+        // let releases = self_update::backends::github::ReleaseList::configure()
+        //     .repo_owner("nedasv")
+        //     .repo_name("val-plus")
+        //     .build().unwrap()
+        //     .fetch();
+        //
+        // println!("{:?}", releases.unwrap().get(0).unwrap());
+
+        //println!("{:?}", cargo_crate_version!());
+
+        ui.label(cargo_crate_version!());
     }
 
     fn home_page(&mut self, ctx: &egui::Context, ui: &mut Ui) {
@@ -562,12 +552,11 @@ impl eframe::App for MyApp {
 
                         match loader.try_load() {
                             Ok(_) => {
-                                println!("RiotAuth exists");
+                                println!("Everything loaded successfully");
                                 self.auth = Some(Arc::new(loader));
                                 self.state = State::Load;
                             }
-                            // Display error msgs or something if not loading
-                            _ => {}
+                            Err(err) => println!("Loader Error: {:?}", err)
                         }
                     } else {
                         ui.add_space(ui.available_height() / 2.0 - 20.);
