@@ -1,4 +1,7 @@
+
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#[macro_use]
+extern crate self_update;
 
 use std::cmp::PartialEq;
 use std::sync::Arc;
@@ -11,12 +14,13 @@ use eframe::egui::{Color32, Id, Layout, Pos2, Sense, Ui, Vec2};
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 use crate::database::{MatchHistory, NameHistory};
+use crate::display::settings::show_settings;
 use crate::images::ImageData;
 use crate::r#match::MatchHandler;
 
-pub mod display {
-    mod home;
-    mod settings;
+mod display {
+    pub mod home;
+    pub mod settings;
 }
 
 mod loader;
@@ -51,42 +55,7 @@ enum TeamType {
     Enemy
 }
 
-#[macro_use]
-extern crate self_update;
-
-fn run() -> Result<(), Box<dyn ::std::error::Error>> {
-    let target = self_update::get_target();
-    let releases = self_update::backends::github::ReleaseList::configure()
-        .repo_owner("nedasv")
-        .repo_name("val-plus")
-        .with_target(&target)
-        .build()?
-        .fetch()?;
-
-    println!("{:?}", releases);
-
-    if let Some(release) = releases.get(0) {
-        let version = &release.version;
-        let status = self_update::backends::github::Update::configure()
-            .repo_owner("nedasv")
-            .repo_name("val-plus")
-            .target(&target)
-            .bin_name("valorant-tracker")
-            .show_download_progress(false)
-            .current_version(cargo_crate_version!())
-            .build()?
-            .update()?;
-        println!("Update status: `{}`!", status.version());
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<(), eframe::Error> {
-    if let Err(e) = run() {
-        eprintln!("Failed to update the application: {}", e);
-    }
-
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -208,47 +177,6 @@ impl Settings {
 }
 
 impl MyApp {
-    fn settings_page(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.label("Auto Refresh: ");
-            ui.checkbox(&mut self.settings.auto_refresh, "");
-        });
-
-        ui.vertical(|ui| ui.add(egui::widgets::Separator::default().spacing(10.0)));
-
-        if ui.button("Import VRY data").clicked() {
-            self.import_promise = Some(Promise::spawn_thread("import_data", || {
-                if let Some(dir) = directories_next::ProjectDirs::from("", "", "vry") {
-                    let path = dir.clone().data_dir().parent().unwrap().join("stats.json");
-                    let new_path = path.as_path();
-
-                    println!("{:?}", new_path.as_os_str().to_string_lossy());
-
-                    let cv = converter::Converter::get_file(new_path.clone());
-                    let (success, fail, total) = converter::Converter::convert_vry_history(cv);
-
-                    return (success, fail, total)
-                }
-
-                return (0, 0, 0)
-            }));
-
-            self.state = State::CheckPromise;
-        }
-
-        // let releases = self_update::backends::github::ReleaseList::configure()
-        //     .repo_owner("nedasv")
-        //     .repo_name("val-plus")
-        //     .build().unwrap()
-        //     .fetch();
-        //
-        // println!("{:?}", releases.unwrap().get(0).unwrap());
-
-        //println!("{:?}", cargo_crate_version!());
-
-        ui.label(cargo_crate_version!());
-    }
-
     fn home_page(&mut self, ctx: &egui::Context, ui: &mut Ui) {
         if let Some(current_match) = &self.current_match {
             let players = &current_match.players;
@@ -672,7 +600,7 @@ impl eframe::App for MyApp {
             }
 
             match &self.page {
-                Page::Settings => self.settings_page(ui),
+                Page::Settings => show_settings(self, ui),
                 Page::Home => self.home_page(ctx, ui),
             }
 
